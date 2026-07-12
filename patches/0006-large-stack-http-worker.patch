@@ -1,0 +1,56 @@
+# Patch 0006 — run the HTTP completion worker on a 64 MB-stack pthread
+# File: mcpelauncher-client/src/jni/lib_http_client.cpp
+# THE real M5/Apple-Silicon crash fix (SIGSEGV in shim::pthread_mutex_lock).
+#
+# Cause: doRequestAsync ran the HTTP completion on a std::thread, which inherits macOS's 512 KB
+# default pthread stack. Minecraft's libHttpClient + the DRM mod recurse deep through a C++
+# promise/continuation graph (built for Android threads >= 1 MB); on 512 KB it overflows the guard
+# page and the next std::mutex::lock reads a garbage thread_mutex_t. Fix: run the worker on a
+# pthread with a 64 MB stack (lazily paged).
+#
+# Reconstructed from the session edits (source tree was deleted); apply by hand during a rebuild.
+
+--- a/mcpelauncher-client/src/jni/lib_http_client.cpp
++++ b/mcpelauncher-client/src/jni/lib_http_client.cpp
+@@ add includes + helper near the top (after the g_httpCallbackMutex definition) @@
+ #include <curl/curl.h>
+ #include <thread>
+ #include <mutex>
++#include <functional>
++#include <pthread.h>
++
++// Nexus fix (the real M5 SIGSEGV): the HTTP completion callback runs Minecraft's own libHttpClient
++// + the DRM mod's OnRequestCompleted, which recurse deep through a C++ promise/continuation graph.
++// std::thread on macOS inherits the pthread DEFAULT stack of only 512 KB — but that code is written
++// for Android threads (>= 1 MB). On our undersized stack the (bounded) chain overshoots the guard
++// page; the next std::mutex::lock then reads a garbage thread_mutex_t and faults in
++// shim::pthread_mutex_lock. Run the worker on a pthread with a large stack so the chain fits.
++static constexpr size_t NEXUS_HTTP_WORKER_STACK = 64u * 1024u * 1024u;  // 64 MB (lazily paged)
++
++static void nexus_spawn_http_worker(std::function<void()> fn) {
++    auto *heapFn = new std::function<void()>(std::move(fn));
++    pthread_attr_t attr;
++    if (pthread_attr_init(&attr) == 0) {
++        pthread_attr_setstacksize(&attr, NEXUS_HTTP_WORKER_STACK);
++        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
++        pthread_t tid;
++        int rc = pthread_create(&tid, &attr, [](void *arg) -> void * {
++            auto *f = static_cast<std::function<void()> *>(arg);
++            (*f)();
++            delete f;
++            return nullptr;
++        }, heapFn);
++        pthread_attr_destroy(&attr);
++        if (rc == 0) return;
++    }
++    std::thread([heapFn]() { (*heapFn)(); delete heapFn; }).detach();  // fallback
++}
+
+@@ in HttpClientRequest::doRequestAsync — swap std::thread for the large-stack worker @@
+-    std::thread([=]() {
++    nexus_spawn_http_worker([=]() {
+         FakeJni::JniEnvContext ctx(*jvm);
+         /* ... unchanged worker body: curl_easy_perform + the serialized OnRequestCompleted /
+            OnRequestFailed JNI callback ... */
+-    }).detach();
++    });

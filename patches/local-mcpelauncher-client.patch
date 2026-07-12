@@ -1,0 +1,84 @@
+# Nexus local patch — uncommitted working-tree diff of submodule 'mcpelauncher-client'
+# Applies on pinned commit: a2f2a88a673d04f32fddcc36dc8b7c7eb663ee64
+# Captured 2026-07-12 from the exact tree that built Nexus Bedrock Runtime v1.7.6-572-nexus5.
+# Patches 0006 (64 MB HTTP-worker stack) + 0003b (mvk-angle EGL for all versions).
+# Apply with: git -C <manifest>/mcpelauncher-client apply <this file>
+#
+diff --git a/src/jni/lib_http_client.cpp b/src/jni/lib_http_client.cpp
+index 3017fb6..7bb632c 100644
+--- a/src/jni/lib_http_client.cpp
++++ b/src/jni/lib_http_client.cpp
+@@ -3,9 +3,39 @@
+ #include <log.h>
+ #include <curl/curl.h>
+ #include <thread>
++#include <functional>
++#include <pthread.h>
+ 
+ using namespace std::placeholders;
+ 
++// Nexus patch 0006 (the real M5 SIGSEGV fix): the HTTP completion callback runs Minecraft's own
++// libHttpClient + the DRM mod's OnRequestCompleted, which recurse deep through a C++
++// promise/continuation graph. std::thread on macOS inherits the pthread DEFAULT stack of only
++// 512 KB — but that code is written for Android threads (>= 1 MB). On our undersized stack the
++// (bounded) chain overshoots the guard page; the next std::mutex::lock then reads a garbage
++// thread_mutex_t and faults in shim::pthread_mutex_lock. Run the worker on a pthread with a large
++// stack so the chain fits.
++static constexpr size_t NEXUS_HTTP_WORKER_STACK = 64u * 1024u * 1024u;  // 64 MB (lazily paged)
++
++static void nexus_spawn_http_worker(std::function<void()> fn) {
++    auto *heapFn = new std::function<void()>(std::move(fn));
++    pthread_attr_t attr;
++    if (pthread_attr_init(&attr) == 0) {
++        pthread_attr_setstacksize(&attr, NEXUS_HTTP_WORKER_STACK);
++        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
++        pthread_t tid;
++        int rc = pthread_create(&tid, &attr, [](void *arg) -> void * {
++            auto *f = static_cast<std::function<void()> *>(arg);
++            (*f)();
++            delete f;
++            return nullptr;
++        }, heapFn);
++        pthread_attr_destroy(&attr);
++        if (rc == 0) return;
++    }
++    std::thread([heapFn]() { (*heapFn)(); delete heapFn; }).detach();  // fallback
++}
++
+ bool slist_contains(struct curl_slist *list, const char *str) {
+     struct curl_slist *current = list;
+     while (current != nullptr) {
+@@ -143,7 +173,7 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+     auto me = this->weak_from_this();
+     FakeJni::LocalFrame frame;
+     auto&& jvm = &frame.getJniEnv().getVM();
+-    std::thread([=]() {
++    nexus_spawn_http_worker([=]() {
+         FakeJni::JniEnvContext ctx(*jvm);
+         try {
+             auto anotherme = me.lock();
+@@ -196,7 +226,7 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+                 method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")));
+             }
+         }
+-    }).detach();
++    });
+ }
+ 
+ FakeJni::JInt HttpClientResponse::getNumHeaders() {
+diff --git a/src/main.cpp b/src/main.cpp
+index 35cd788..91489b4 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -248,7 +248,10 @@ int main(int argc, char* argv[]) {
+     readOptions();
+ 
+ #ifdef __APPLE__
+-    if(MinecraftVersion::isAtLeast(1, 26, 10, 0)) {
++    // Nexus patch 0003b: wire up the mvk-angle EGL library for ALL versions, not just 1.26.10+.
++    // Older versions (e.g. 1.21.x) also fall back to the ES2/EGL path when desktop-GL fails, and
++    // without elg_lib set GLFW throws "EGL: Library not found" and aborts at window creation.
++    if(FileUtil::exists(PathHelper::getAppDir() + "/../Frameworks/mvk-angle/libEGL.dylib")) {
+         std::string appdir = PathHelper::getAppDir();
+         std::string libEGL = appdir + "/../Frameworks/mvk-angle/libEGL.dylib";
+         std::string MoltenVK_icd = appdir + "/../Frameworks/mvk-angle/MoltenVK_icd.json";

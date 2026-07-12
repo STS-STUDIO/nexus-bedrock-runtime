@@ -1,0 +1,18 @@
+# Patch 0003b — wire up mvk-angle EGL for ALL versions (not just 1.26.10+)
+# File: mcpelauncher-client/src/main.cpp  (~line 251)
+#
+# Without this, older versions (e.g. 1.21.x) that fall back to the ES2/EGL path (after desktop-GL
+# fails to load libminecraftpe with "glBindRenderbuffer") abort at window creation with
+# "EGL: Library not found", because elg_lib is never set. Found during the 2026-07-11 rebuild
+# verification: the shipped engine ran 1.21.130.3 fine; a fresh build gated to 1.26.10+ aborted.
+# Widen the gate so elg_lib (mvk-angle libEGL) is set whenever the mvk-angle framework exists.
+
+--- a/mcpelauncher-client/src/main.cpp
++++ b/mcpelauncher-client/src/main.cpp
+@@ #ifdef __APPLE__ @@
+-    if(MinecraftVersion::isAtLeast(1, 26, 10, 0)) {
++    // Nexus 0003b: all versions, not just 1.26.10+ — older ones also need EGL or they abort.
++    if(FileUtil::exists(PathHelper::getAppDir() + "/../Frameworks/mvk-angle/libEGL.dylib")) {
+         std::string appdir = PathHelper::getAppDir();
+         std::string libEGL = appdir + "/../Frameworks/mvk-angle/libEGL.dylib";
+         ... (unchanged: set elg_lib + ANGLE_DEFAULT_PLATFORM=vulkan + VK_ICD_FILENAMES) ...
