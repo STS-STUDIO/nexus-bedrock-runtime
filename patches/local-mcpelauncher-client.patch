@@ -1,19 +1,161 @@
-# Nexus local patch — uncommitted working-tree diff of submodule 'mcpelauncher-client'
-# Applies on pinned commit: a2f2a88a673d04f32fddcc36dc8b7c7eb663ee64
-# Captured 2026-07-12 from the exact tree that built Nexus Bedrock Runtime v1.7.6-572-nexus5.
-# Patches 0006 (64 MB HTTP-worker stack) + 0003b (mvk-angle EGL for all versions).
-# Apply with: git -C <manifest>/mcpelauncher-client apply <this file>
-#
+diff --git a/src/imgui_ui.cpp b/src/imgui_ui.cpp
+index 3bf28d5..fe6fe4f 100644
+--- a/src/imgui_ui.cpp
++++ b/src/imgui_ui.cpp
+@@ -1,4 +1,5 @@
+ #include "imgui_ui.h"
++#include <cstdlib>
+ #include "settings.h"
+ 
+ #include <time.h>
+@@ -603,7 +604,17 @@ void ImGuiUIDrawFrame(GameWindow* window) {
+         auto secs = std::chrono::duration_cast<std::chrono::milliseconds>(now - mouseOnY0Since).count();
+         showMenuBarViaMouse = secs >= 500;
+     }
+-    auto autoShowMenubar = (!window->getFullscreen() || showMenuBarViaMouse || menuFocused);
++    // Nexus: RIGHT-SHIFT toggles the Nexus mods page (drawn below), Java-client style. The
++    // upstream menubar stays hidden unless the mouse rests at the top edge (500ms) or it has
++    // keyboard focus — the game window looks clean by default.
++    static bool nexusPageOpen = false;
++    if(ImGui::IsKeyPressed(ImGuiKey_RightShift, false)) {
++        nexusPageOpen = !nexusPageOpen;
++        if(nexusPageOpen) {
++            ImGui::SetNextFrameWantCaptureKeyboard(true);
++        }
++    }
++    auto autoShowMenubar = (showMenuBarViaMouse || menuFocused);
+     static auto showFilePicker = false;
+     static auto show_demo_window = false;
+     static auto show_confirm_popup = false;
+@@ -754,6 +765,21 @@ void ImGuiUIDrawFrame(GameWindow* window) {
+             }
+             ImGui::EndMenu();
+         }
++        // Nexus quick toggles — one-click versions of the View-menu HUD settings
++        // ("on" = Ingame mode: HUDs show while actually playing, not over menus).
++        if(ImGui::BeginMenu("Nexus")) {
++            if(ImGui::MenuItem("FPS HUD", nullptr, Settings::enable_fps_hud != 0)) {
++                Settings::enable_fps_hud = Settings::enable_fps_hud != 0 ? 0 : 2;
++                Settings::save();
++            }
++            if(ImGui::MenuItem("Keystrokes + CPS HUD", nullptr, Settings::enable_keystroke_hud != 0)) {
++                Settings::enable_keystroke_hud = Settings::enable_keystroke_hud != 0 ? 0 : 2;
++                Settings::save();
++            }
++            ImGui::Separator();
++            ImGui::MenuItem("Right-Shift toggles this menu", nullptr, false, false);
++            ImGui::EndMenu();
++        }
+         if(ImGui::BeginMenu("Help")) {
+             ImGui::MenuItem("About", nullptr, &show_about);
+             ImGui::EndMenu();
+@@ -766,6 +792,95 @@ void ImGuiUIDrawFrame(GameWindow* window) {
+         menuFocused = false;
+         lastwantfocusnextframe = false;
+     }
++
++    // ── NEXUS MODS page — Right-Shift toggles it. Dawn-style panel in launcher colors:
++    // near-black bg, purple border/accents, blocky sections. All toggles persist via Settings.
++    if(nexusPageOpen) {
++        const float s = (float)Settings::scale;
++        auto* vp = ImGui::GetMainViewport();
++        ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
++        ImGui::SetNextWindowSize(ImVec2(440 * s, 0), ImGuiCond_Always);
++        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.043f, 0.047f, 0.078f, 0.97f));
++        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.541f, 0.169f, 0.886f, 1.0f));
++        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.541f, 0.169f, 0.886f, 0.35f));
++        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.541f, 0.169f, 0.886f, 0.62f));
++        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.541f, 0.169f, 0.886f, 0.85f));
++        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.29f, 0.87f, 0.5f, 1.0f));
++        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.10f, 0.11f, 0.17f, 1.0f));
++        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.16f, 0.17f, 0.26f, 1.0f));
++        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
++        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
++        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24 * s, 18 * s));
++        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10 * s, 9 * s));
++        if(ImGui::Begin("##nexuspage", &nexusPageOpen,
++                        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
++                        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
++            // Header: NEXUS wordmark + studio line
++            ImGui::PushFont(fontVeryLargeSize);
++            ImGui::TextColored(ImVec4(0.655f, 0.545f, 1.0f, 1.0f), "NEXUS");
++            ImGui::PopFont();
++            ImGui::SameLine(0, 10 * s);
++            ImGui::PushFont(fontMediumSize);
++            ImGui::TextColored(ImVec4(0.29f, 0.87f, 0.5f, 1.0f), "MODS");
++            ImGui::PopFont();
++            ImGui::PushFont(fontDefaultSize);
++            ImGui::TextDisabled("BY STS STUDIO");
++            ImGui::PopFont();
++            ImGui::Dummy(ImVec2(0, 4 * s));
++            ImGui::Separator();
++            ImGui::Dummy(ImVec2(0, 4 * s));
++
++            // Mods — HUD toggles (persisted; "on" = Ingame mode so HUDs show while playing)
++            ImGui::PushFont(fontMediumSize);
++            bool fps = Settings::enable_fps_hud != 0;
++            if(ImGui::Checkbox("FPS HUD", &fps)) {
++                Settings::enable_fps_hud = fps ? 2 : 0;
++                Settings::save();
++            }
++            bool keys = Settings::enable_keystroke_hud != 0;
++            if(ImGui::Checkbox("Keystrokes + CPS", &keys)) {
++                Settings::enable_keystroke_hud = keys ? 2 : 0;
++                Settings::save();
++            }
++            bool vsync = Settings::vsync;
++            if(ImGui::Checkbox("VSync", &vsync)) {
++                Settings::vsync = vsync;
++                Settings::save();
++                window->setSwapInterval(Settings::vsync ? 1 : 0);
++            }
++            bool fs = window->getFullscreen();
++            if(ImGui::Checkbox("Fullscreen", &fs)) {
++                window->setFullscreen(fs);
++                Settings::fullscreen = fs;
++                Settings::save();
++            }
++            ImGui::PopFont();
++
++            ImGui::Dummy(ImVec2(0, 6 * s));
++            ImGui::PushFont(fontMediumSize);
++            float bw = (ImGui::GetContentRegionAvail().x - 10 * s) / 2;
++            if(ImGui::Button("JOIN DISCORD", ImVec2(bw, 40 * s))) {
++#ifdef __APPLE__
++                std::system("open 'https://discord.gg/stsstudio' >/dev/null 2>&1 &");
++#else
++                std::system("xdg-open 'https://discord.gg/stsstudio' >/dev/null 2>&1 &");
++#endif
++            }
++            ImGui::SameLine(0, 10 * s);
++            if(ImGui::Button("CLOSE", ImVec2(bw, 40 * s))) {
++                nexusPageOpen = false;
++            }
++            ImGui::PopFont();
++            ImGui::Dummy(ImVec2(0, 2 * s));
++            ImGui::PushFont(fontDefaultSize);
++            ImGui::TextDisabled("Right-Shift opens & closes this menu");
++            ImGui::PopFont();
++        }
++        ImGui::End();
++        ImGui::PopStyleVar(4);
++        ImGui::PopStyleColor(8);
++    }
++
+     // Always center this window when appearing
+     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 diff --git a/src/jni/lib_http_client.cpp b/src/jni/lib_http_client.cpp
-index 3017fb6..7bb632c 100644
+index 3017fb6..e60b537 100644
 --- a/src/jni/lib_http_client.cpp
 +++ b/src/jni/lib_http_client.cpp
-@@ -3,9 +3,39 @@
+@@ -3,9 +3,40 @@
  #include <log.h>
  #include <curl/curl.h>
  #include <thread>
 +#include <functional>
 +#include <pthread.h>
++#include <unistd.h>
  
  using namespace std::placeholders;
  
@@ -48,7 +190,56 @@ index 3017fb6..7bb632c 100644
  bool slist_contains(struct curl_slist *list, const char *str) {
      struct curl_slist *current = list;
      while (current != nullptr) {
-@@ -143,7 +173,7 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+@@ -17,8 +48,20 @@ bool slist_contains(struct curl_slist *list, const char *str) {
+     return false;
+ }
+ 
++// Nexus: our statically-linked curl uses a custom OpenSSL whose baked-in OPENSSLDIR has no CA
++// bundle, so EVERY https request failed TLS verification (the game's profile/store/Xbox screens
++// spun forever, and pre-fix the failed-callback path aborted the game). Point curl at macOS's
++// system CA bundle, which every macOS ships at /etc/ssl/cert.pem.
++void nexus_curl_setup_cainfo(void *curl) {
++    static const bool has_system_pem = access("/etc/ssl/cert.pem", R_OK) == 0;
++    if(has_system_pem) {
++        curl_easy_setopt(curl, CURLOPT_CAINFO, "/etc/ssl/cert.pem");
++    }
++}
++
+ HttpClientRequest::HttpClientRequest() {
+     curl = curl_easy_init();
++    nexus_curl_setup_cainfo(curl);
+     curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+     // Fallback if neither setHttpMethodAndBody or setHttpMethodAndBody2 has been called
+     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, HttpClientRequest::write_callback_wrapper_old);
+@@ -138,12 +181,35 @@ void HttpClientRequest::setHttpHeader(std::shared_ptr<FakeJni::JString> name, st
+     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
+ }
+ 
++void HttpClientRequest::invokeRequestFailed(FakeJni::LocalFrame &frame, FakeJni::JLong sourceCall, bool isNoNetwork) {
++    try {
++        auto method4 = getClass().getMethod("(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V", "OnRequestFailed");
++        if(method4) {
++            method4->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")),
++                            frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
++                            frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
++                            isNoNetwork);
++            return;
++        }
++        auto method2 = getClass().getMethod("(JLjava/lang/String;)V", "OnRequestFailed");
++        if(method2) {
++            method2->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")));
++            return;
++        }
++        Log::error("HttpClient", "No OnRequestFailed native registered - dropping failure callback");
++    } catch(const std::exception &e) {
++        Log::error("HttpClient", "OnRequestFailed callback threw: %s", e.what());
++    } catch(...) {
++        Log::error("HttpClient", "OnRequestFailed callback threw an unknown exception");
++    }
++}
++
+ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+     call_handle = sourceCall;
      auto me = this->weak_from_this();
      FakeJni::LocalFrame frame;
      auto&& jvm = &frame.getJniEnv().getVM();
@@ -57,15 +248,82 @@ index 3017fb6..7bb632c 100644
          FakeJni::JniEnvContext ctx(*jvm);
          try {
              auto anotherme = me.lock();
-@@ -196,7 +226,7 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
-                 method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")));
+@@ -165,19 +231,13 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+                 Log::trace("HttpClient", "Response: code: %ld", response_code);
+ #endif
+                 auto method = getClass().getMethod("(JLcom/xbox/httpclient/HttpClientResponse;)V", "OnRequestCompleted");
+-                method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<HttpClientResponse>(sourceCall, response_code, response, headers)));
+-            } else {
+-                // Detect if https://github.com/microsoft/libHttpClient/commit/bea2069547e6d480342476cf328b651584e2ada5 is compiled into the binary
+-                if(NetworkObserver::getDescriptor()->getMethod("(Ljava/lang/String;)V", "Log")) {
+-                    auto method = getClass().getMethod("(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V", "OnRequestFailed");
+-                    method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")),
+-                                   frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
+-                                   frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
+-                                   ret == CURLE_COULDNT_RESOLVE_PROXY || ret == CURLE_COULDNT_RESOLVE_HOST || ret == CURLE_COULDNT_CONNECT);
++                if(method) {
++                    method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<HttpClientResponse>(sourceCall, response_code, response, headers)));
+                 } else {
+-                    auto method = getClass().getMethod("(JLjava/lang/String;)V", "OnRequestFailed");
+-                    method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")));
++                    Log::error("HttpClient", "No OnRequestCompleted(J,HttpClientResponse) native registered - dropping response");
+                 }
++            } else {
++                invokeRequestFailed(frame, sourceCall, ret == CURLE_COULDNT_RESOLVE_PROXY || ret == CURLE_COULDNT_RESOLVE_HOST || ret == CURLE_COULDNT_CONNECT);
              }
+         } catch(...) {
+             if(me.expired()) {
+@@ -185,18 +245,9 @@ void HttpClientRequest::doRequestAsync(FakeJni::JLong sourceCall) {
+                 return;
+             }
+             FakeJni::LocalFrame frame(*jvm);
+-            if(NetworkObserver::getDescriptor()->getMethod("(Ljava/lang/String;)V", "Log")) {
+-                auto method = getClass().getMethod("(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V", "OnRequestFailed");
+-                method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")),
+-                               frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
+-                               frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("")),
+-                               false);
+-            } else {
+-                auto method = getClass().getMethod("(JLjava/lang/String;)V", "OnRequestFailed");
+-                method->invoke(frame.getJniEnv(), this, sourceCall, frame.getJniEnv().createLocalReference(std::make_shared<FakeJni::JString>("Error")));
+-            }
++            invokeRequestFailed(frame, sourceCall, false);
          }
 -    }).detach();
 +    });
  }
  
  FakeJni::JInt HttpClientResponse::getNumHeaders() {
+diff --git a/src/jni/lib_http_client.h b/src/jni/lib_http_client.h
+index d77583e..58742c2 100644
+--- a/src/jni/lib_http_client.h
++++ b/src/jni/lib_http_client.h
+@@ -61,6 +61,12 @@ private:
+     std::string method;
+     FakeJni::JLong call_handle;
+ 
++    // Report a failed request to whichever OnRequestFailed overload the game actually
++    // registered. Never throws: newer Bedrock (1.26.20.4+) registers ONLY the 4-arg variant
++    // and no NetworkObserver.Log, so signature guessing + an unguarded invoke aborted the
++    // whole game (uncaught std::runtime_error("No such Method!") from a worker thread).
++    void invokeRequestFailed(FakeJni::LocalFrame &frame, FakeJni::JLong sourceCall, bool isNoNetwork);
++
+     size_t write_callback_old(char *ptr, size_t size, size_t nmemb);
+     size_t write_callback(char *ptr, size_t size, size_t nmemb);
+     size_t header_callback(char *buffer, size_t size, size_t nitems);
+diff --git a/src/jni/lib_http_client_websocket.cpp b/src/jni/lib_http_client_websocket.cpp
+index 52e7f14..7bc315f 100644
+--- a/src/jni/lib_http_client_websocket.cpp
++++ b/src/jni/lib_http_client_websocket.cpp
+@@ -46,6 +46,8 @@ HttpClientWebSocket::HttpClientWebSocket(FakeJni::JLong owner) {
+ 
+ #ifdef ENABLE_WEBSOCKETS
+     curl = curl_easy_init();
++    extern void nexus_curl_setup_cainfo(void *curl); // system CA bundle (see lib_http_client.cpp)
++    nexus_curl_setup_cainfo(curl);
+     curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L);
+ #endif
+ 
 diff --git a/src/main.cpp b/src/main.cpp
 index 35cd788..91489b4 100644
 --- a/src/main.cpp

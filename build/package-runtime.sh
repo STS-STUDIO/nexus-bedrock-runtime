@@ -25,6 +25,29 @@ ditto "$SRC" "$DST"
 say "swapping in the patched arm64 client…"
 cp "$CLIENT" "$DST/Contents/MacOS/mcpelauncher-client-arm64-v8a"
 
+# ── SLIM: drop the dead Qt payload (~227 MB of the 401 MB bundle) ────────────────────────────
+# The launch path (mcpelauncher-client-arm64-v8a, direct exec) is Qt-free — verified via otool.
+# Qt only served: mcpelauncher-ui-qt (x86_64 first-run fallback Nexus never reaches — the
+# launcher downloads the game itself), msa-ui-qt (legacy MSA UI), and the stock Qt webview
+# (replaced by nexus-webview below). msa-daemon and the x86_64 clients are KEPT this tag —
+# they're small-ish and unproven-safe to drop; candidates for a later wave.
+say "slimming: removing Qt frameworks, plugins, qml, ui-qt, msa-ui-qt…"
+rm -rf "$DST/Contents/Frameworks/"Qt*.framework
+rm -rf "$DST/Contents/Frameworks/Sparkle.framework"
+rm -rf "$DST/Contents/Frameworks/__MACOSX"
+rm -rf "$DST/Contents/PlugIns"
+rm -rf "$DST/Contents/Resources/qml"
+rm -f  "$DST/Contents/Resources/qt.conf"
+rm -f  "$DST/Contents/MacOS/mcpelauncher-ui-qt"
+rm -f  "$DST/Contents/MacOS/msa-ui-qt"
+
+say "shipping nexus-webview as THE Xbox sign-in webview…"
+NEXUS_WEBVIEW="$HOME/Downloads/nexus-antigravity/src-tauri/resources/nexus-webview"
+[ -f "$NEXUS_WEBVIEW" ] || { echo "No nexus-webview at: $NEXUS_WEBVIEW (build it in the launcher repo)"; exit 1; }
+cp -f "$NEXUS_WEBVIEW" "$DST/Contents/MacOS/mcpelauncher-webview"
+chmod 755 "$DST/Contents/MacOS/mcpelauncher-webview"
+rm -f "$DST/Contents/MacOS/mcpelauncher-webview.stock"   # slim runtime has no stock to revert to
+
 say "shipping OpenSSL dylibs + relocating linkage to @rpath…"
 CIB="$DST/Contents/MacOS/mcpelauncher-client-arm64-v8a"
 if [ -d "$OPENSSL" ]; then

@@ -1,9 +1,3 @@
-# Nexus local patch — uncommitted working-tree diff of submodule 'mcpelauncher-core'
-# Applies on pinned commit: f38ba5a1242b6b964588c1d2614583560cf9b068
-# Captured 2026-07-12 from the exact tree that built Nexus Bedrock Runtime v1.7.6-572-nexus5.
-# Patch 0007: headless Google credentials (minecraft_utils.cpp).
-# Apply with: git -C <manifest>/mcpelauncher-core apply <this file>
-#
 diff --git a/src/minecraft_utils.cpp b/src/minecraft_utils.cpp
 index d7f2360..9bca324 100644
 --- a/src/minecraft_utils.cpp

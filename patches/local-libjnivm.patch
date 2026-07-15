@@ -1,0 +1,19 @@
+diff --git a/src/jnivm/vm.cpp b/src/jnivm/vm.cpp
+index b27b9d2..bab1444 100644
+--- a/src/jnivm/vm.cpp
++++ b/src/jnivm/vm.cpp
+@@ -261,6 +261,14 @@ jint RegisterNatives(JNIEnv *env, jclass c, const JNINativeMethod *method, jint
+ 		std::lock_guard<std::mutex> lock(clazz->mtx);
+ 		while(i--) {
+ 			clazz->natives[method->name] = method->fnPtr;
++			// Nexus: always log the game's libHttpClient registrations — newer Bedrock versions
++			// change these callback signatures (1.26.20.4 broke OnRequestCompleted) and this log
++			// is the ground truth for adapting lib_http_client.cpp.
++			if(clazz->nativeprefix.find("httpclient") != std::string::npos) {
++				std::stringstream ss;
++				ss << "Class \"" << clazz->nativeprefix << "\" registered native method: " << method->name << " signature: " << method->signature;
++				LOG("JNIVM", "%s", ss.str().data());
++			}
+ #ifdef JNI_TRACE
+ 			std::stringstream ss;
+ 			ss << "Class \"" << clazz->nativeprefix << "\" registred native method: " << method->name << " signature: " << method->signature;

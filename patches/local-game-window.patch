@@ -1,9 +1,3 @@
-# Nexus local patch — uncommitted working-tree diff of submodule 'game-window'
-# Applies on pinned commit: d073c2aace1521ae32d239ca4fc26b97e4b4a27e
-# Captured 2026-07-12 from the exact tree that built Nexus Bedrock Runtime v1.7.6-572-nexus5.
-# Patch 0003: OpenGL ES 3.1 context for MC 1.26+ (window_glfw.cpp).
-# Apply with: git -C <manifest>/game-window apply <this file>
-#
 diff --git a/src/window_glfw.cpp b/src/window_glfw.cpp
 index 7e0a85b..523bb72 100644
 --- a/src/window_glfw.cpp

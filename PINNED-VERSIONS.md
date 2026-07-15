@@ -1,4 +1,9 @@
-# Pinned versions — Nexus Bedrock Runtime v1.7.6-572-nexus5
+# Pinned versions — Nexus Bedrock Runtime v1.7.6-572-nexus6
+
+> nexus6 (2026-07-15): imgui submodule initialized at its pinned commit
+> a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda (enables the overlay + Right-Shift Nexus
+> mods page), TLS CA fix + crash-proof HTTP callbacks in mcpelauncher-client, and an
+> httpclient RegisterNatives log in libjnivm. All local diffs re-captured below.
 
 Exact source state of the tree that built the shipped runtime. Captured 2026-07-12 from the
 build workspace (`~/nexus-engine/mcpelauncher`) with the commands shown below.
