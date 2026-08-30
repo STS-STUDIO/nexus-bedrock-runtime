@@ -202,8 +202,9 @@ cd ~/nexus-engine/build-client && ninja mcpelauncher-client
 ```
 
 Host arm64, no cross-compile flags. Configure takes about 100 s and **needs network**: it downloads
-curl 8.0.1, glfw3 and nlohmann_json at configure time. The build itself is 457 targets, about 33 s
-on an M5.
+curl 8.0.1, glfw3 and nlohmann_json at configure time. The build itself is 457 targets, about 2 minutes
+on an M5 from a cold build directory (re-measured 2026-08-30; the older "33 s" figure was an
+incremental build, not a clean one).
 
 Expected, harmless: OpenSSL 3.0-deprecation warnings, one `-Wnontrivial-memcall` in `imgui_ui.cpp`,
 a duplicate `-lpthread` note, and `ld: building for macOS-26.5 but linking with dylib ... built for
@@ -221,8 +222,16 @@ nexus6 source state).
 ### 6. Package
 
 ```sh
-bash ~/Desktop/nexus-bedrock-runtime/build/package-runtime.sh
+TAG=v1.7.6-572-nexusN bash ~/Desktop/nexus-bedrock-runtime/build/package-runtime.sh
 ```
+
+**This step overwrites `~/Downloads/nexus-antigravity/runtime-release/Nexus-Bedrock-Runtime.dmg`,
+the artefact the publish script uploads.** Because this tree is nexus6 and the release DMG holds the
+nexus8 client, running it unguarded replaces the reviewed release candidate with a build that has no
+Nexus HUD. The script now refuses the DMG step when the client it just swapped in has fewer
+`nexus_*` settings than the installed runtime, and tells you to set `ALLOW_HUD_REGRESSION=1` if you
+really mean it. The bundle at `~/nexus-engine/patched-runtime` is still produced either way, which
+is what the launch test in step 7 uses.
 
 Copies the installed bundle to `~/nexus-engine/patched-runtime/`, swaps in the fresh client, drops
 the Qt payload, ships `nexus-webview` and the two OpenSSL dylibs, rewrites their linkage to

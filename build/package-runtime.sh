@@ -163,6 +163,32 @@ codesign --force --deep --sign - "$DST" 2>&1 | tail -1
 # This step used to be done by hand, which is how a hand-stripped bundle and a script-built
 # one drifted apart. Building it here means the STRIP block above is binding on what ships.
 DMG_OUT="$HOME/Downloads/nexus-antigravity/runtime-release/Nexus-Bedrock-Runtime.dmg"
+
+# HUD REGRESSION GUARD. Writing the DMG replaces the artefact publish-runtime-patched.sh uploads.
+# The build workspace currently reproduces nexus6, which has none of the 16 nexus_* HUD settings the
+# shipped client carries, so a plain "rebuild then package" silently produces a release candidate
+# with the whole Nexus HUD deleted. Compare the client we just swapped in against the installed one
+# and refuse the DMG if it went backwards. The bundle itself is still built, so the launch test in
+# REBUILD.md step 7 works either way.
+NEW_HUD=$(strings -a "$DST/Contents/MacOS/mcpelauncher-client-arm64-v8a" | grep -c '^nexus_' || true)
+OLD_HUD=$(strings -a "$SRC/Contents/MacOS/mcpelauncher-client-arm64-v8a" | grep -c '^nexus_' || true)
+if [ "$NEW_HUD" -lt "$OLD_HUD" ] && [ "${ALLOW_HUD_REGRESSION:-0}" != "1" ]; then
+  cat >&2 <<MSG
+
+REFUSING TO BUILD THE DMG.
+
+The client just built carries $NEW_HUD nexus_* settings; the installed runtime carries $OLD_HUD.
+This build is missing HUD features that players are using today, so writing
+  $DMG_OUT
+would replace the release candidate with a runtime that has no Nexus HUD.
+
+The bundle is still at $DST if you only wanted a local launch test.
+If you really mean to ship a build with fewer features, re-run with ALLOW_HUD_REGRESSION=1.
+MSG
+  echo "PACKAGE_DONE (no DMG)  ->  $DST"
+  exit 0
+fi
+
 if [ -d "$(dirname "$DMG_OUT")" ]; then
   say "building the DMG…"
   rm -f "$DMG_OUT"

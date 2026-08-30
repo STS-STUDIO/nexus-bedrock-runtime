@@ -9,7 +9,10 @@ Exact source state of the tree that built the shipped runtime. Captured 2026-07-
 build workspace (`~/nexus-engine/mcpelauncher`) with the commands shown below.
 
 > **Re-verified 2026-08-30.** The workspace was deleted on 2026-07-11 and has now been restored.
-> Every SHA in the table below was checked against a fresh `--recursive` clone and all 34 match.
+> Every SHA in the table below was checked against a fresh `--recursive` clone and all 33 match.
+> (Re-counted 2026-08-30: `git submodule status --recursive` prints 33 entries, not 34. The SHAs
+> themselves are identical to the raw block below; only the `git describe` suffix differs, which is
+> cosmetic.)
 > The four `local-*.patch` files re-apply and diff back byte-identical. The client built clean and
 > 1.26.10.4 launched to a fully rendered main menu. Corrections made in this pass: the imgui and
 > libjnivm rows, the "cannot be fetched by SHA" note, and the OpenSSL entry (which was unpinned and
