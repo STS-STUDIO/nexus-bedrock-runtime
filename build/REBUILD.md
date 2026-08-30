@@ -43,6 +43,38 @@ work is recovered or rewritten, treat this workspace as **read-only for shipping
 the engine, to regenerate the nexus6 patches, and to test builds locally. Do not swap its output
 into the installed runtime and do not publish a tag from it.
 
+### Where the gap actually is, from a string diff of the three bundles
+
+The old bundle backups next to the installed one are the intermediate tags, so the delta can be
+localised without the source. Comparing sorted `strings` output:
+
+- `Minecraft Bedrock.app.fat-backup` (Jul 14, 7,799,472 B) is pre-nexus6.
+- `Minecraft Bedrock.app.pre-imgui` (Jul 14, 8,323,648 B) is nexus5.
+- `Minecraft Bedrock.app.pre-nexus8` (Jul 17, 10,185,488 B) is **nexus7**.
+- `Minecraft Bedrock.app` (Aug 28, 10,254,208 B) is **nexus8**, the live one.
+
+**nexus7 adds 964 strings over the nexus6 build**, but almost nothing recognisably Nexus: the only
+notable ones are a build-path leak and `Nexus Launcher %s / build %s`. Whatever nexus7 changed, it
+is not a large user-facing feature.
+
+**nexus8 adds 358 strings over nexus7, and that is the whole missing feature set.** It is an imgui
+mods UI with a module system, plus launcher-account integration:
+
+```
+##nexusgrid   ##nexusmodsettings   ##nexussearch   ##nexusdiscordbtn   ##joindiscord
+/Library/Application Support/NexusLauncher/account.json
+"HUD POSITION"   "Keystrokes"   "Discord Button"   "NEXUS branding on your screen"
+"Draws a thin Nexus cross at the exact centre of the screen."
+"Bedrock HUD modules snap to corner presets and stack inside their corner. Free drag
+ placement, per module scale and the Java live preview are not wired up in this engine yet."
+"Gameplay module - it changes how the game behaves and has no HUD box."
+```
+
+So a rewrite target is: a searchable module grid in `imgui_ui.cpp`, per-module settings with
+corner-preset HUD positioning, the 16 `nexus_*` keys persisted through the existing launcher
+settings file, and reading `account.json` from the launcher's support dir. Recovering the real
+nexus8 source is still far preferable to reimplementing from these strings.
+
 ## The compiled engine is also recoverable without a rebuild
 - Installed bundle: `~/Library/Application Support/NexusLauncher/bedrock-runtime/Minecraft Bedrock.app`
 - Or download `Nexus-Bedrock-Runtime.dmg` from the release channel and mount it.
