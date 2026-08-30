@@ -1,0 +1,107 @@
+Nexus Bedrock Runtime
+License notice and offer of corresponding source
+
+RELEASE: __RUNTIME_TAG__
+
+
+1. WHAT THIS IS
+
+The Nexus Bedrock Runtime is a MODIFIED build of the mcpelauncher project, an
+open source program that runs Minecraft: Bedrock Edition natively on desktop
+operating systems.
+
+    Upstream project : https://github.com/minecraft-linux/mcpelauncher-manifest
+    Upstream branch  : ng
+    Upstream build   : 0.2.572 (minecraft-linux/macos-builder)
+
+STS Studio modified it for macOS on Apple Silicon. The modifications were made
+during 2026, starting from the upstream commit dated 2026-06-25 and continuing
+up to the release date of the build named in the RELEASE line above. They cover
+OpenGL ES 3.1 window creation, the HTTP worker thread stack size, TLS
+certificate authority configuration, headless Google Play credentials, the Xbox
+sign in webview lookup path, and an in game overlay.
+
+
+2. WHICH FILES ARE UNDER THE GPL
+
+The following files in this bundle are covered by the GNU General Public
+License, version 3 or (at your option) any later version.
+
+  Contents/MacOS/mcpelauncher-client-arm64-v8a
+      Built by STS Studio from MODIFIED mcpelauncher sources. This is the
+      modified work. Section 3 says where its complete corresponding source is.
+
+  Contents/MacOS/mcpelauncher-extract
+  Contents/MacOS/msa-daemon
+      Redistributed byte for byte from the upstream macos-builder 0.2.572
+      release, unmodified by STS Studio. Their corresponding source is the
+      upstream project named in section 1, at that release. STS Studio will also
+      supply it under the written offer in section 4.
+
+Everything else in the bundle is under a permissive license and is NOT covered
+by the GPL: ANGLE and MoltenVK (Apache-2.0 / BSD-3-Clause), OpenSSL 3
+(Apache-2.0), libzip (BSD-3-Clause), protobuf (BSD-3-Clause), libc++ (Apache-2.0
+with LLVM exception), and the Android runtime libraries under
+Contents/Resources/mcpelauncher/lib (AOSP, Apache-2.0 / BSD-3-Clause; SQLite is
+public domain). Contents/MacOS/mcpelauncher-webview is STS Studio's own code.
+
+
+3. CORRESPONDING SOURCE
+
+The complete corresponding source for the modified binary named in section 2 is
+published, free of charge and with no account required, at:
+
+    https://github.com/STS-STUDIO/nexus-bedrock-runtime
+
+It contains the pinned upstream commit of every component, every STS Studio
+patch, and the scripts that control compilation and packaging.
+
+HOW TO FIND THE SOURCE FOR YOUR EXACT BUILD: that repository carries a git tag
+whose name is exactly the RELEASE line at the top of this file. Check out that
+tag and follow its README. The README also carries a table of every shipped
+release and states, for each one, whether its source is in the repository.
+
+KNOWN EXCEPTIONS, stated plainly rather than left for you to discover:
+v1.7.6-572-nexus7 and v1.7.6-572-nexus8 were built and published before their
+patches were mirrored, and the build workspace they came from was deleted. There
+is no tag for them in that repository. If you hold one of those releases, use
+the written offer in section 4. The same applies to any later release that has
+no matching tag.
+
+
+4. WRITTEN OFFER OF SOURCE
+
+For any release whose source is not in the repository named in section 3, STS
+Studio offers, to anyone who possesses this software, for at least three years
+from the date that release was distributed, to give the complete corresponding
+source of the GPL binaries listed in section 2, either as a download or on a
+physical medium, for no charge beyond the cost of delivery.
+
+    Write to: gamersxbad@gmail.com
+    Subject : corresponding source, Nexus Bedrock Runtime
+    Include : the RELEASE line at the top of this file
+
+The same address serves as the fallback if the repository is ever unreachable.
+
+
+5. LICENSE AND WARRANTY
+
+GNU General Public License, version 3, or (at your option) any later version.
+Full text: https://www.gnu.org/licenses/gpl-3.0.txt, and the LICENSE file of the
+repository named in section 3.
+
+Copyright for the modifications: (c) 2026 STS Studio.
+Copyright for the upstream work: the mcpelauncher project contributors.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+
+6. NOT COVERED BY THIS NOTICE
+
+Minecraft: Bedrock Edition itself is never distributed by STS Studio. Each user
+downloads their own copy from their own Google Play account.
+
+The Nexus Launcher is a separate, proprietary program by STS Studio. It runs
+this runtime as an independent process.

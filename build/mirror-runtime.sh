@@ -12,6 +12,15 @@
 # NOTICE.txt is published alongside it — the runtime is GPL-3.0 open source, and
 # keeping a small license/source notice on the download channel is what makes
 # redistributing it legal. It's a plain text file; it's not shown on any page.
+#
+# LEGACY PATH, READ BEFORE RUNNING. Everything shipped since v1.7.6-572-nexus5 is
+# our own patched build, published by publish-runtime-patched.sh. This script
+# publishes UPSTREAM's build under UPSTREAM's tag, so running it replaces the
+# patched runtime every player is on. The source-tag guard below stops that:
+# upstream's tag is not in our source mirror, so the script refuses. If you ever
+# genuinely mean to go back to stock upstream, mirror that tag first, and note
+# that the shared notice in runtime-notice.txt describes a MODIFIED build and
+# would need a stock variant.
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -38,6 +47,42 @@ TAG=$(echo "$sel" | cut -f1); URL=$(echo "$sel" | cut -f2); SIZE=$(echo "$sel" |
 [ -n "$TAG" ] || { echo "Could not find an upstream build."; exit 1; }
 echo "  found $TAG ($SIZE bytes)"
 
+# The GPL notice that ships next to the DMG. One template, one substitution, so
+# the two publish scripts can never drift apart again (they did, and one of them
+# spent weeks telling users the runtime was unmodified upstream).
+write_notice() {
+  local tag="$1" tmpl="runtime-notice.txt"
+  [ -f "$tmpl" ] || { echo "Missing $tmpl — cannot publish without the GPL notice."; exit 1; }
+  sed "s|__RUNTIME_TAG__|${tag}|" "$tmpl" > runtime-release/NOTICE.txt
+  grep -q "__RUNTIME_TAG__" runtime-release/NOTICE.txt && { echo "NOTICE.txt tag substitution failed."; exit 1; }
+  return 0
+}
+
+# GPL-3.0 section 6: the corresponding source has to be available for the exact
+# build being shipped. Refuse to publish a tag the source mirror does not carry.
+require_mirrored_source() {
+  local tag="$1" mirror="https://github.com/STS-STUDIO/nexus-bedrock-runtime.git"
+  echo "Checking the source mirror for tag $tag …"
+  if git ls-remote --tags "$mirror" "refs/tags/$tag" 2>/dev/null | grep -q "refs/tags/$tag"; then
+    echo "  ✔ source published for $tag"
+    return 0
+  fi
+  cat >&2 <<MSG
+
+REFUSING TO PUBLISH.
+
+  $mirror
+carries no tag "$tag", so the corresponding source for this build is not
+published. Shipping it puts the runtime back in breach of GPL-3.0 section 6.
+
+Stage the patches for this build in ~/Desktop/nexus-bedrock-runtime, commit,
+tag it "$tag", push, then re-run this script.
+MSG
+  exit 1
+}
+
+require_mirrored_source "$TAG"
+
 mkdir -p runtime-release
 echo "Downloading…"
 # --retry + -C - : resume/retry on transient network errors; skip if already
@@ -56,18 +101,7 @@ cat > runtime-release/runtime-manifest.json <<EOF
 }
 EOF
 
-cat > runtime-release/NOTICE.txt <<'EOF'
-Nexus Bedrock Runtime — third-party license notice
-
-The Bedrock runtime distributed at this URL is an unmodified build of the
-mcpelauncher project, free software licensed under the GNU General Public
-License v3.0. Corresponding source code: https://github.com/minecraft-linux
-License text: https://www.gnu.org/licenses/gpl-3.0.txt
-
-The game itself is never distributed here; it is downloaded from each user's
-own Google Play account. Nexus Launcher (a separate, proprietary application
-by STS Studio) runs this runtime as an independent process.
-EOF
+write_notice "$TAG"
 
 # --fail makes curl exit non-zero on any HTTP error, which aborts the script
 # (set -e) — so a failed upload can never leave a manifest pointing at nothing.

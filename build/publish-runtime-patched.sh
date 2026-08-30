@@ -5,20 +5,55 @@
 #
 # Unlike mirror-runtime.sh, this does NOT re-download upstream — it publishes the
 # DMG we built from ~/nexus-engine/patched-runtime, under a bumped tag so every
-# client re-downloads it. Host defaults to Railway (always reachable; stsstudio.org
-# 403s behind Cloudflare). Override SITE/TAG via env.
+# client re-downloads it. Host is the Hostinger VPS (stsstudio.org). ALWAYS pass
+# TAG explicitly, bumped past the live one (check the served runtime-manifest.json).
 #
-#   NEXUS_RELEASE_SECRET="<secret>" ./publish-runtime-patched.sh
-#   NEXUS_RELEASE_SECRET="<secret>" SITE="https://stsstudio.org" TAG="v1.7.6-572-nexus5" ./publish-runtime-patched.sh
+#   NEXUS_RELEASE_SECRET="<secret>" TAG="v1.7.6-572-nexus9" ./publish-runtime-patched.sh
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SITE="${SITE:-https://stsstudio-production.up.railway.app}"
-TAG="${TAG:-v1.7.6-572-nexus5}"
+SITE="${SITE:-https://stsstudio.org}"
+TAG="${TAG:?set TAG explicitly (e.g. v1.7.6-572-nexus9) — check the live runtime-manifest.json first}"
 DMG="runtime-release/Nexus-Bedrock-Runtime.dmg"
 [ -n "${NEXUS_RELEASE_SECRET:-}" ] || { echo "Set NEXUS_RELEASE_SECRET first."; exit 1; }
 [ -f "$DMG" ] || { echo "Missing $DMG — build it first (see docs/engine-build-plan.md)."; exit 1; }
+
+# The GPL notice that ships next to the DMG. One template, one substitution, so
+# the two publish scripts can never drift apart again (they did, and one of them
+# spent weeks telling users the runtime was unmodified upstream).
+write_notice() {
+  local tag="$1" tmpl="runtime-notice.txt"
+  [ -f "$tmpl" ] || { echo "Missing $tmpl — cannot publish without the GPL notice."; exit 1; }
+  sed "s|__RUNTIME_TAG__|${tag}|" "$tmpl" > runtime-release/NOTICE.txt
+  grep -q "__RUNTIME_TAG__" runtime-release/NOTICE.txt && { echo "NOTICE.txt tag substitution failed."; exit 1; }
+  return 0
+}
+
+# GPL-3.0 section 6: the corresponding source has to be available for the exact
+# build being shipped. Refuse to publish a tag the source mirror does not carry.
+require_mirrored_source() {
+  local tag="$1" mirror="https://github.com/STS-STUDIO/nexus-bedrock-runtime.git"
+  echo "Checking the source mirror for tag $tag …"
+  if git ls-remote --tags "$mirror" "refs/tags/$tag" 2>/dev/null | grep -q "refs/tags/$tag"; then
+    echo "  ✔ source published for $tag"
+    return 0
+  fi
+  cat >&2 <<MSG
+
+REFUSING TO PUBLISH.
+
+  $mirror
+carries no tag "$tag", so the corresponding source for this build is not
+published. Shipping it puts the runtime back in breach of GPL-3.0 section 6.
+
+Stage the patches for this build in ~/Desktop/nexus-bedrock-runtime, commit,
+tag it "$tag", push, then re-run this script.
+MSG
+  exit 1
+}
+
+require_mirrored_source "$TAG"
 
 SIZE=$(stat -f%z "$DMG")
 echo "Publishing patched runtime: tag=$TAG size=$SIZE → $SITE"
@@ -32,18 +67,7 @@ cat > runtime-release/runtime-manifest.json <<EOF
 }
 EOF
 
-cat > runtime-release/NOTICE.txt <<'EOF'
-Nexus Bedrock Runtime — third-party license notice
-
-This Bedrock runtime is a build of the mcpelauncher project (GNU GPL-3.0), with
-small compatibility patches by STS Studio. Corresponding source + patches:
-https://github.com/minecraft-linux  and the Nexus engine-patches.
-License text: https://www.gnu.org/licenses/gpl-3.0.txt
-
-The game itself is never distributed here; it is downloaded from each user's own
-Google Play account. Nexus Launcher (proprietary, by STS Studio) runs this runtime
-as an independent process.
-EOF
+write_notice "$TAG"
 
 upload_small() {
   echo "  uploading $1 …"
