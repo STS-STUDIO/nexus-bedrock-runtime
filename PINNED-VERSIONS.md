@@ -152,11 +152,53 @@ Other build inputs (not part of the mcpelauncher tree):
   `libcrypto.3.dylib` ship inside the runtime bundle. This pair is **Apache-2.0**.
 
   Correction, and it matters for the licence notice: the sentence "OpenSSL is Apache-2.0-licensed"
-  was written as a blanket claim and is **not true of the whole shipped bundle**. The bundle also
-  carries a second, unrelated OpenSSL generation: `libssl.dylib` / `libcrypto.dylib` at 1.1.1x,
-  used only by the **x86_64** client. Those are under the old **OpenSSL/SSLeay** dual licence, not
-  Apache-2.0, and 1.1.1 has been **end of life since September 2023**. Only the `*.3.dylib` pair
-  above is Apache-2.0. (Whether the 1.1.1 pair and the x86_64 client can be dropped from the bundle
-  is tracked separately; it is not a build input and nothing in this workspace produces it.)
+  was written as a blanket claim and was **not true of the whole shipped bundle**. Up to and
+  including nexus8 the bundle also carried `Contents/Frameworks/libssl.dylib` and
+  `libcrypto.dylib`, a second and unrelated OpenSSL. Two details that the first pass got wrong and
+  that anyone re-checking this should know:
+
+  - It is a **fat** binary, and the generations differ per slice. Only the **i386** slice is
+    `OpenSSL 1.1.1x-dev`; the x86_64 and arm64 slices are `OpenSSL 3.2.7-dev`, the same as the
+    `*.3.dylib` pair. So the licence problem was confined to the i386 slice, but it was real:
+    1.1.1 is under the old **OpenSSL/SSLeay** dual licence, not Apache-2.0, and has been **end of
+    life since September 2023**.
+  - It was **not** "used only by the x86_64 client". Nothing in the bundle linked it at all.
+    Checked by running `otool -L` over every Mach-O in `Contents/MacOS`, `Contents/Frameworks` and
+    `Contents/Frameworks/mvk-angle`, and by grepping every binary for a dlopen-by-name reference to
+    the unversioned filenames. The only OpenSSL consumer is `mcpelauncher-client-arm64-v8a`, which
+    links `@rpath/libssl.3.dylib` and `@rpath/libcrypto.3.dylib` and carries a single `LC_RPATH` of
+    `@executable_path`, so it resolves the 3.2.7 pair in `Contents/MacOS`.
+
+  RESOLVED in nexus9: both files are removed by the STRIP block in `build/package-runtime.sh`, and
+  a launch test of 1.26.10.4 confirmed only the `*.3.dylib` pair is mapped and that HTTPS to the
+  Xbox Live endpoints still establishes. Every OpenSSL now shipped is Apache-2.0, which is what the
+  notice claims. Note the bundle still carries a **duplicate** `libssl.3.dylib` / `libcrypto.3.dylib`
+  in `Contents/Frameworks` that is unreachable for the same rpath reason, about 5 MB. It is
+  deliberately left alone: Apache-2.0, no licence reason to touch it, so no reason to take the risk.
 - Host toolchain: standalone cmake + ninja binaries, Apple clang, native arm64 host build
   (no cross-compile flags), `-DBUILD_UI=OFF`.
+
+- **`-DENABLE_DEV_PATHS=OFF` is MISSING from every build we have shipped, and it should not be.**
+  `mcpelauncher/CMakeLists.txt:68` defines it as `ON` by default with the description "Enables
+  lookup in source directories for misc files required by the launcher. This should be disabled
+  for package builds." Upstream is telling us plainly, and we have ignored it. With it on, the
+  compiler bakes
+
+  ```
+  DEV_EXTRA_PATHS="/Users/yugh/nexus-engine/mcpelauncher/mcpelauncher-mac-bin:/Users/yugh/nexus-engine/build-client/gamecontrollerdb"
+  ```
+
+  into the client, and `PathHelper::findDataFile` searches those two directories **before** the
+  app bundle's own `Resources` dir. Confirmed present in the shipped nexus8 binary and in the
+  nexus9 candidate with `strings`. Two consequences:
+
+  1. It puts the build machine's home directory path into a binary handed to every player.
+  2. It makes local testing lie. `mcpelauncher-mac-bin` also contains a `libfmod.dylib`, so on
+     this machine the client kept finding host FMOD after the file was deleted from the bundle,
+     and a "removed it and it still works" test passed for entirely the wrong reason. See the
+     testing note in the STRIP block of `build/package-runtime.sh` for how to test honestly.
+
+  NOT fixed here, because fixing it means rebuilding the client, and the client we ship is nexus8,
+  whose source is lost (see the STOP section in `build/REBUILD.md`). Add `-DENABLE_DEV_PATHS=OFF`
+  to the configure line of the first client build we actually ship, and re-verify with
+  `strings <client> | grep nexus-engine`, which should then return nothing.
