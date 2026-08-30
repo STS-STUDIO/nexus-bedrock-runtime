@@ -10,6 +10,39 @@ It is NOT needed for launcher development (that's `~/Downloads/nexus-antigravity
 run the game (the compiled engine ships in `Nexus-Bedrock-Runtime.dmg`). Rebuild it when you want to
 change the engine, or to regenerate the fork patches this mirror publishes.
 
+## STOP: this tree is nexus6. What ships is nexus8. Do not build and ship without reading this.
+
+The restored workspace reproduces **v1.7.6-572-nexus6** exactly. The runtime installed on players'
+machines is **v1.7.6-572-nexus8**, and the nexus7/nexus8 source is **not in this tree and not
+anywhere else on this machine** (searched 2026-08-30: the only `imgui_ui.cpp` on disk is the nexus6
+one here).
+
+The gap is real and it is large:
+
+| | nexus6 build from this tree | shipped nexus8 binary |
+|---|---|---|
+| size | 9,175,712 bytes | 10,254,208 bytes |
+| `nexus_*` settings | **0** | **16** |
+
+The 16 features present only in the shipped binary, recovered with `strings`:
+
+```
+nexus_auto_checkout   nexus_cps            nexus_cps_pos         nexus_crosshair
+nexus_discord_button  nexus_fps            nexus_fps_pos         nexus_keystrokes
+nexus_keystrokes_pos  nexus_real_clock     nexus_real_clock_pos  nexus_session_timer
+nexus_session_timer_pos  nexus_toggle_sprint  nexus_watermark    nexus_watermark_pos
+```
+
+`~/Library/Application Support/mcpelauncher/mcpelauncher-client-settings.txt` already has values
+saved for these, so players are using them today.
+
+**Therefore: building from this tree and shipping the result would silently delete the entire Nexus
+HUD (keystrokes, CPS, FPS, watermark, crosshair, session timer, real clock, toggle-sprint, Discord
+button).** This is the same trap as the NexusCore and 26.2-client source losses. Until the nexus7/8
+work is recovered or rewritten, treat this workspace as **read-only for shipping**: use it to study
+the engine, to regenerate the nexus6 patches, and to test builds locally. Do not swap its output
+into the installed runtime and do not publish a tag from it.
+
 ## The compiled engine is also recoverable without a rebuild
 - Installed bundle: `~/Library/Application Support/NexusLauncher/bedrock-runtime/Minecraft Bedrock.app`
 - Or download `Nexus-Bedrock-Runtime.dmg` from the release channel and mount it.
