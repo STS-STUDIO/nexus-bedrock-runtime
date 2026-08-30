@@ -1,4 +1,4 @@
-# Pinned versions — Nexus Bedrock Runtime v1.7.6-572-nexus6
+# Pinned versions: Nexus Bedrock Runtime v1.7.6-572-nexus6
 
 > nexus6 (2026-07-15): imgui submodule initialized at its pinned commit
 > a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda (enables the overlay + Right-Shift Nexus
@@ -7,6 +7,14 @@
 
 Exact source state of the tree that built the shipped runtime. Captured 2026-07-12 from the
 build workspace (`~/nexus-engine/mcpelauncher`) with the commands shown below.
+
+> **Re-verified 2026-08-30.** The workspace was deleted on 2026-07-11 and has now been restored.
+> Every SHA in the table below was checked against a fresh `--recursive` clone and all 34 match.
+> The four `local-*.patch` files re-apply and diff back byte-identical. The client built clean and
+> 1.26.10.4 launched to a fully rendered main menu. Corrections made in this pass: the imgui and
+> libjnivm rows, the "cannot be fetched by SHA" note, and the OpenSSL entry (which was unpinned and
+> made a licence claim that does not hold for the whole bundle). See `build/REBUILD.md` for the
+> verified end-to-end recipe.
 
 ## Manifest repository
 
@@ -29,7 +37,7 @@ origin	https://github.com/minecraft-linux/mcpelauncher-manifest (push)
 
 `git submodule status --recursive` (a leading space means the checkout matches the pinned
 commit; `-` means not initialized). Submodules whose **working trees carried uncommitted local
-changes** at build time are marked — those diffs are captured verbatim in
+changes** at build time are marked, and those diffs are captured verbatim in
 [`patches/local-*.patch`](patches/):
 
 | | Pinned commit | Submodule | Local changes? |
@@ -45,9 +53,9 @@ changes** at build time are marked — those diffs are captured verbatim in
 | | `32da109b9e65331ed8931f40642b3fc6af9f7de5` | file-picker | |
 | | `47193f42d10f0bb4bfcab021f305acb6f76192a0` | file-util | |
 | **M** | `d073c2aace1521ae32d239ca4fc26b97e4b4a27e` | game-window | `patches/local-game-window.patch` |
-| — | `a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda` | imgui | not initialized (UI-only, `submodule.imgui.update none`; not built) |
+| | `a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda` | imgui | initialized and **built into the client** |
 | | `4ed0e447a38250435ec3c4fb596a53491465341c` | libc-shim | |
-| | `f24b98c198fcc5c59a68d1efadd3f5791eb01c2e` | libjnivm | clean — stock upstream (see README note on historical patch 0001) |
+| **M** | `f24b98c198fcc5c59a68d1efadd3f5791eb01c2e` | libjnivm | `patches/local-libjnivm.patch` |
 | | `68d75a74f80a93ec4ff7a96eea0909df28d45330` | linux-gamepad | |
 | | `6cd91de7228bb41f29efa6b0da0ec60ccb56397a` | logger | |
 | | `b2f3760545450783771288144b56b3a2455b66e2` | mcpelauncher-apkinfo | |
@@ -70,12 +78,22 @@ changes** at build time are marked — those diffs are captured verbatim in
 
 Notes on checkout:
 
-- The nested submodules `mcpelauncher-linker/bionic` and `mcpelauncher-linker/core` are pinned to
-  SHAs that cannot be fetched by SHA; clone their forks directly and `git checkout <sha>`:
+- The nested submodules `mcpelauncher-linker/bionic` and `mcpelauncher-linker/core` are fetched by a
+  plain `--recursive` clone at the SHAs above. (An earlier revision of this file claimed they
+  "cannot be fetched by SHA" and had to be cloned directly. That did not reproduce on 2026-08-30.)
   - bionic: `https://github.com/minecraft-linux/android_bionic` @ `081b55b1f45745b1e6f93c49b3831107542a426d`
   - core: `https://github.com/minecraft-linux/android_core` @ `0235714fbf5593df145e8f991f82c5926c2df2df`
-- `imgui` was never initialized (`git config submodule.imgui.update none`) — it is UI-only and not
-  referenced by the client build (`-DBUILD_UI=OFF`).
+- `imgui` **is** initialized and **is** built into the client (since nexus6): `imgui.cpp`,
+  `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `imgui_demo.cpp` and our
+  `mcpelauncher-client/src/imgui_ui.cpp` all compile into `mcpelauncher-client`. It clones normally
+  from `https://github.com/ocornut/imgui` at the `.gitmodules` pin. Do **not** set
+  `submodule.imgui.update none`. That was earlier advice and it is wrong; the "unfetchable pin"
+  claim was false. `-DBUILD_UI=OFF` disables the separate **Qt** UI and is unrelated to imgui.
+- `mcpelauncher-linker/bionic` always reports 8 modified files under `libc/kernel/uapi/linux/netfilter*/`
+  (`xt_CONNMARK.h`, `xt_DSCP.h`, `xt_MARK.h`, `xt_RATEEST.h`, `xt_TCPMSS.h`, `ipt_ECN.h`,
+  `ipt_TTL.h`, `ip6t_HL.h`). Each has a lowercase sibling in the same directory and case-insensitive
+  APFS collapses the pair, so git sees the wrong content. This is a filesystem artifact, not a Nexus
+  change. Leave it; it does not affect the build.
 
 ## Raw `git submodule status --recursive` output
 
@@ -91,7 +109,7 @@ Notes on checkout:
  32da109b9e65331ed8931f40642b3fc6af9f7de5 file-picker (heads/master)
  47193f42d10f0bb4bfcab021f305acb6f76192a0 file-util (heads/master)
  d073c2aace1521ae32d239ca4fc26b97e4b4a27e game-window (heads/master)
--a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda imgui
+ a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda imgui (v1.62-4996-ga0bfbe4d8)
  4ed0e447a38250435ec3c4fb596a53491465341c libc-shim (heads/master)
  f24b98c198fcc5c59a68d1efadd3f5791eb01c2e libjnivm (heads/main)
  68d75a74f80a93ec4ff7a96eea0909df28d45330 linux-gamepad (heads/master)
@@ -117,7 +135,28 @@ Notes on checkout:
 
 Other build inputs (not part of the mcpelauncher tree):
 
-- **OpenSSL 3.2**, built from source with `perl Configure darwin64-arm64`; `libssl.3.dylib` and
-  `libcrypto.3.dylib` ship inside the runtime bundle (OpenSSL is Apache-2.0-licensed).
+- **OpenSSL 3.2.7-dev**, built from source. This was previously recorded only as "OpenSSL 3.2",
+  which does not reproduce: it is a **branch** checkout, not a release tag. Exact inputs:
+
+  ```
+  repo:   https://github.com/openssl/openssl.git
+  branch: openssl-3.2
+  commit: 14ddbcee237cb99b3921c352852b4d4fadbb8e6c   (2025-11-24)
+  perl Configure darwin64-arm64 \
+    --prefix=$HOME/nexus-engine/openssl-install \
+    --openssldir=/etc/ssl \
+    no-tests
+  ```
+
+  `--openssldir=/etc/ssl` is deliberate (system trust store). `libssl.3.dylib` and
+  `libcrypto.3.dylib` ship inside the runtime bundle. This pair is **Apache-2.0**.
+
+  Correction, and it matters for the licence notice: the sentence "OpenSSL is Apache-2.0-licensed"
+  was written as a blanket claim and is **not true of the whole shipped bundle**. The bundle also
+  carries a second, unrelated OpenSSL generation: `libssl.dylib` / `libcrypto.dylib` at 1.1.1x,
+  used only by the **x86_64** client. Those are under the old **OpenSSL/SSLeay** dual licence, not
+  Apache-2.0, and 1.1.1 has been **end of life since September 2023**. Only the `*.3.dylib` pair
+  above is Apache-2.0. (Whether the 1.1.1 pair and the x86_64 client can be dropped from the bundle
+  is tracked separately; it is not a build input and nothing in this workspace produces it.)
 - Host toolchain: standalone cmake + ninja binaries, Apple clang, native arm64 host build
   (no cross-compile flags), `-DBUILD_UI=OFF`.
