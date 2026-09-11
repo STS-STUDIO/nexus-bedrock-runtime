@@ -10,11 +10,22 @@ It is NOT needed for launcher development (that's `~/Downloads/nexus-antigravity
 run the game (the compiled engine ships in `Nexus-Bedrock-Runtime.dmg`). Rebuild it when you want to
 change the engine, or to regenerate the fork patches this mirror publishes.
 
-## STOP: this tree is nexus6. What ships is nexus8. Do not build and ship without reading this.
+## Status: this tree is nexus9. The nexus7/nexus8 source stays lost, and stays irrelevant.
 
-The restored workspace reproduces **v1.7.6-572-nexus6** exactly. The runtime installed on players'
-machines is **v1.7.6-572-nexus8**, and the nexus7/nexus8 source is **not in this tree and not
-anywhere else on this machine** (searched 2026-08-30: the only `imgui_ui.cpp` on disk is the nexus6
+**Update (nexus9):** the trap this section used to warn about is closed. The mod menu and every
+HUD module were REWRITTEN against this restored tree (engine commit `7f81306`), the in game store
+was then removed together with its embedded bearer token (engine commit `175ccaf`), and the
+workspace is under the snapshot system (`state/`, mirrored here as `source-state/`). A build from
+this tree now carries MORE `nexus_*` settings than the shipped nexus8 binary did, and
+`package-runtime.sh` enforces that with its HUD regression guard. The nexus7/nexus8 source is
+still lost, but nexus9 supersedes both for every player through runtime auto update.
+
+The history below is kept because it documents the loss and how it was bounded. It describes the
+tree as restored on 2026-08-30, BEFORE the nexus9 rewrite landed.
+
+The restored workspace reproduced **v1.7.6-572-nexus6** exactly. The runtime installed on players'
+machines was **v1.7.6-572-nexus8**, and the nexus7/nexus8 source is **not in this tree and not
+anywhere else on this machine** (searched 2026-08-30: the only `imgui_ui.cpp` on disk was the nexus6
 one here).
 
 The gap is real and it is large:
@@ -36,12 +47,10 @@ nexus_session_timer_pos  nexus_toggle_sprint  nexus_watermark    nexus_watermark
 `~/Library/Application Support/mcpelauncher/mcpelauncher-client-settings.txt` already has values
 saved for these, so players are using them today.
 
-**Therefore: building from this tree and shipping the result would silently delete the entire Nexus
-HUD (keystrokes, CPS, FPS, watermark, crosshair, session timer, real clock, toggle-sprint, Discord
-button).** This is the same trap as the NexusCore and 26.2-client source losses. Until the nexus7/8
-work is recovered or rewritten, treat this workspace as **read-only for shipping**: use it to study
-the engine, to regenerate the nexus6 patches, and to test builds locally. Do not swap its output
-into the installed runtime and do not publish a tag from it.
+**At the time, building from this tree and shipping the result would have silently deleted the
+entire Nexus HUD.** That was the same trap as the NexusCore and 26.2-client source losses. The
+nexus9 rewrite (see the Status note above) is what lifted it: the features exist in this tree
+again, snapshotted and mirrored, so the workspace is no longer read only for shipping.
 
 ### Where the gap actually is, from a string diff of the three bundles
 

@@ -32,8 +32,8 @@ source tree.
 | `v1.7.6-572-nexus5` | `2af7c24b3d1e89cd1a594fb491f8c47372fd80cf` (2026-06-25) | complete, at this repo's tag `v1.7.6-572-nexus5` |
 | `v1.7.6-572-nexus6` | `2af7c24b3d1e89cd1a594fb491f8c47372fd80cf` (2026-06-25) | complete, at this repo's tag `v1.7.6-572-nexus6` |
 | `v1.7.6-572-nexus7` | same | **NOT IN THIS REPOSITORY** (see below) |
-| `v1.7.6-572-nexus8` | same | **NOT IN THIS REPOSITORY** (see below); this is the release live on the download channel |
-| `v1.7.6-572-nexus9` | same | **NOT IN THIS REPOSITORY** (see below); prepared, not yet published |
+| `v1.7.6-572-nexus8` | same | **NOT IN THIS REPOSITORY** (see below) |
+| `v1.7.6-572-nexus9` | same | complete, at this repo's tag `v1.7.6-572-nexus9` (`source-state/` is the machine-checked snapshot); this is the release live on the download channel |
 
 Every release gets a row here and a git tag of the same name on the commit that carries its
 patches. Both publishing scripts (`build/publish-runtime-patched.sh` and `build/mirror-runtime.sh`)
@@ -54,14 +54,18 @@ without their patches being mirrored here, and the build workspace they were bui
   a toggle sprint key helper, a clickable Discord button, and a STORE tab that reads the Nexus
   catalogue over HTTPS and hands a purchase intent to the launcher.
 
-`v1.7.6-572-nexus9` carries **the same client binary as `nexus8`**: it is a repackage that drops
-dead weight from the bundle, not a rebuild. Its GPL binaries are byte for byte the `nexus8` ones,
-so it inherits the same missing source.
+`v1.7.6-572-nexus9` is **not** in that group. An earlier plan repackaged the `nexus8` binary
+under the new tag; that plan was dropped. The shipped `nexus9` is a fresh build from the restored
+workspace: the in game mod menu and every HUD module were reimplemented against the `nexus6` tree
+(module grid, search, per module settings, FPS, CPS, keystrokes, session timer, watermark, real
+clock, custom crosshair, toggle sprint, Discord button, corner preset HUD stacking), and the in
+game store was removed outright, together with the bearer token the old build embedded. Its full
+source is captured in this repository at tag `v1.7.6-572-nexus9`.
 
-Until that source exists here, this repository is the corresponding source for `nexus5` and
-`nexus6` only, and anyone holding `nexus7`, `nexus8` or `nexus9` should use the source request
-address in [NOTICE.txt](NOTICE.txt), which now says so in the notice itself rather than leaving
-the reader to discover it.
+This repository is therefore the corresponding source for `nexus5`, `nexus6` and `nexus9`.
+Anyone still holding `nexus7` or `nexus8` should use the source request address in
+[NOTICE.txt](NOTICE.txt), which says so in the notice itself rather than leaving the reader to
+discover it.
 
 #### What was checked, so nobody repeats the search
 
@@ -82,8 +86,9 @@ Restoring the deleted `~/nexus-engine` workspace does **not** bring this source 
 So the two honest routes are: rewrite those features against the restored tree and ship a release
 whose source **is** published, which supersedes `nexus7` and `nexus8` for every player through
 auto-update; or keep serving the written offer in [NOTICE.txt](NOTICE.txt) and answer it by hand.
-The first route is the one that actually ends the obligation. Publishing `nexus9` as-is does not:
-it ships the same un-sourced binary under a new tag.
+The first route is the one that actually ends the obligation, and it is the route `nexus9`
+took: the features were rewritten against the restored tree, the result was snapshotted, and the
+release ships only what this repository reproduces.
 
 ## How the source tree is reconstructed
 
@@ -111,7 +116,7 @@ it ships the same un-sourced binary under a new tag.
    | Patch file | Submodule | What it changes |
    |---|---|---|
    | `local-game-window.patch` | game-window | **0003** — request OpenGL ES **3.1** instead of 3.0 (`src/window_glfw.cpp`); MC 1.26+ requires ES 3.1. |
-   | `local-mcpelauncher-client.patch` | mcpelauncher-client | **0006** — run the HTTP completion worker on a 64 MB-stack pthread (`src/jni/lib_http_client.cpp`); fixes the Apple-Silicon SIGSEGV (512 KB default stack overflow). **0003b** — wire up the mvk-angle EGL library for all game versions, not just 1.26.10+ (`src/main.cpp`). Since `nexus6` also: `CURLOPT_CAINFO=/etc/ssl/cert.pem` on both curl handles (the bundled OpenSSL ships no CA bundle, so every in game HTTPS request failed TLS verification), guarded HTTP completion callbacks, and the Right-Shift Nexus overlay page (`src/imgui_ui.cpp`). |
+   | `local-mcpelauncher-client.patch` | mcpelauncher-client | **0006** — run the HTTP completion worker on a 64 MB-stack pthread (`src/jni/lib_http_client.cpp`); fixes the Apple-Silicon SIGSEGV (512 KB default stack overflow). **0003b** — wire up the mvk-angle EGL library for all game versions, not just 1.26.10+ (`src/main.cpp`). Since `nexus6` also: `CURLOPT_CAINFO=/etc/ssl/cert.pem` on both curl handles (the bundled OpenSSL ships no CA bundle, so every in game HTTPS request failed TLS verification), guarded HTTP completion callbacks, and the Right-Shift Nexus overlay page (`src/imgui_ui.cpp`). Since `nexus9`: the rewritten mod menu and HUD module system in `src/nexus_mods.cpp` / `src/nexus_mods.h`, with no store and no embedded token. |
    | `local-libjnivm.patch` | libjnivm | Since `nexus6`: log `RegisterNatives` registrations for the httpclient classes (`src/jnivm/vm.cpp`), used to diagnose the HTTP callback crash. |
    | `local-mcpelauncher-core.patch` | mcpelauncher-core | **0007** — headless Google credentials: read `nexus-google-cred` ("email:token") written by the launcher instead of forking the `mcpelauncher-ui-qt` credential window (`src/minecraft_utils.cpp`). |
    | `local-mcpelauncher-linker-bionic.patch` | mcpelauncher-linker/bionic | **Not an intentional patch** — a macOS case-insensitive-filesystem checkout artifact (`xt_MARK.h` vs `xt_mark.h` etc. collide). Recorded so this repo reproduces the build tree byte-for-byte; these Linux-kernel netfilter headers are not compiled into the macOS build. |

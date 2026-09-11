@@ -59,27 +59,13 @@ write_notice() {
 }
 
 # GPL-3.0 section 6: the corresponding source has to be available for the exact
-# build being shipped. Refuse to publish a tag the source mirror does not carry.
-require_mirrored_source() {
-  local tag="$1" mirror="https://github.com/STS-STUDIO/nexus-bedrock-runtime.git"
-  echo "Checking the source mirror for tag $tag …"
-  if git ls-remote --tags "$mirror" "refs/tags/$tag" 2>/dev/null | grep -q "refs/tags/$tag"; then
-    echo "  ✔ source published for $tag"
-    return 0
-  fi
-  cat >&2 <<MSG
-
-REFUSING TO PUBLISH.
-
-  $mirror
-carries no tag "$tag", so the corresponding source for this build is not
-published. Shipping it puts the runtime back in breach of GPL-3.0 section 6.
-
-Stage the patches for this build in ~/Desktop/nexus-bedrock-runtime, commit,
-tag it "$tag", push, then re-run this script.
-MSG
-  exit 1
-}
+# build being shipped. require_mirrored_source refuses to publish a tag unless
+# the public mirror carries that tag AND the source under it is the source this
+# build came from. Shared with the other publish script so they cannot drift.
+GUARDS="$PWD/release-guards.sh"   # both scripts cd to their own directory above
+[ -f "$GUARDS" ] || { echo "Missing $GUARDS — cannot publish without the source guard." >&2; exit 1; }
+# shellcheck source=release-guards.sh
+. "$GUARDS"
 
 require_mirrored_source "$TAG"
 

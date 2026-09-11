@@ -1,5 +1,10 @@
 # Pinned versions: Nexus Bedrock Runtime v1.7.6-572-nexus6
 
+> nexus9 (2026-09-11): same upstream pins as nexus6; the local diffs moved on (mod menu and HUD
+> module rewrite, store removal). The machine checked record for nexus9 is `source-state/engine.lock`
+> plus `source-state/patches/`, captured from the build workspace at engine commit `175ccaf`.
+> The `patches/local-*.patch` files are refreshed from that same snapshot.
+
 > nexus6 (2026-07-15): imgui submodule initialized at its pinned commit
 > a0bfbe4d8f6ddf7f678e6aeac7b1253fe2fc9cda (enables the overlay + Right-Shift Nexus
 > mods page), TLS CA fix + crash-proof HTTP callbacks in mcpelauncher-client, and an
