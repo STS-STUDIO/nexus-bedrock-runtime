@@ -81,7 +81,7 @@ fi
 cat > runtime-release/runtime-manifest.json <<EOF
 {
   "tag": "${TAG}",
-  "dmg_url": "${SITE}/nexus/download/Nexus-Bedrock-Runtime.dmg",
+  "dmg_url": "${SITE}/nexus/download/Nexus-Bedrock-Runtime.dmg?v=${TAG}",
   "dmg_name": "Nexus-Bedrock-Runtime.dmg",
   "size": ${SIZE}
 }

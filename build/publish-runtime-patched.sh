@@ -44,10 +44,15 @@ require_mirrored_source "$TAG"
 SIZE=$(stat -f%z "$DMG")
 echo "Publishing patched runtime: tag=$TAG size=$SIZE → $SITE"
 
+# CACHE KEY IS LOAD BEARING. The DMG is served public,max-age=14400 while the manifest is
+# no-cache. Same url + new bytes let Cloudflare hand a client the PREVIOUS runtime while the
+# manifest already names the new tag; the installer then stamps runtime.version with the new
+# tag over the old bytes and that machine never re-downloads. A per tag query string gives
+# each runtime its own cache key, exactly like the launcher tarball in make-release.sh.
 cat > runtime-release/runtime-manifest.json <<EOF
 {
   "tag": "${TAG}",
-  "dmg_url": "${SITE}/nexus/download/Nexus-Bedrock-Runtime.dmg",
+  "dmg_url": "${SITE}/nexus/download/Nexus-Bedrock-Runtime.dmg?v=${TAG}",
   "dmg_name": "Nexus-Bedrock-Runtime.dmg",
   "size": ${SIZE}
 }
