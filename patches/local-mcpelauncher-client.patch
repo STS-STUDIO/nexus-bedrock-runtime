@@ -283,7 +283,7 @@ index 35cd788..91489b4 100644
          std::string libEGL = appdir + "/../Frameworks/mvk-angle/libEGL.dylib";
          std::string MoltenVK_icd = appdir + "/../Frameworks/mvk-angle/MoltenVK_icd.json";
 diff --git a/src/settings.cpp b/src/settings.cpp
-index 576948c..189c012 100644
+index 576948c..61e3c7a 100644
 --- a/src/settings.cpp
 +++ b/src/settings.cpp
 @@ -3,6 +3,7 @@
@@ -294,7 +294,7 @@ index 576948c..189c012 100644
  
  std::optional<bool> Settings::enable_imgui = {};
  std::atomic<int> Settings::menubarsize = 0;
-@@ -20,6 +21,33 @@ int Settings::enable_keystroke_hud;
+@@ -20,6 +21,37 @@ int Settings::enable_keystroke_hud;
  float Settings::keystroke_hud_x;
  float Settings::keystroke_hud_y;
  
@@ -318,17 +318,21 @@ index 576948c..189c012 100644
 +float Settings::nexus_watermark_scale;
 +int Settings::nexus_crosshair;
 +float Settings::nexus_crosshair_scale;
++int Settings::nexus_fps_graph;
++int Settings::nexus_fps_graph_pos;
++float Settings::nexus_fps_graph_scale;
 +int Settings::nexus_discord_button;
 +int Settings::nexus_toggle_sprint;
 +float Settings::nexus_hud_opacity;
 +int Settings::nexus_hud_accent;
 +int Settings::nexus_hud_in_menus;
++float Settings::nexus_menu_scale;
 +std::string Settings::nexus_menu_key;
 +
  std::string Settings::videoMode;
  float Settings::scale;
  std::string Settings::menubarFocusKey;
-@@ -53,6 +81,34 @@ static properties::property<int> enable_keystroke_hud(settings, "enable_keystrok
+@@ -53,6 +85,40 @@ static properties::property<int> enable_keystroke_hud(settings, "enable_keystrok
  static properties::property<float> keystroke_hud_x(settings, "keystroke_hud_x", /* default if not defined*/ 0);
  static properties::property<float> keystroke_hud_y(settings, "keystroke_hud_y", /* default if not defined*/ 0);
  
@@ -353,17 +357,23 @@ index 576948c..189c012 100644
 +static properties::property<float> nexus_watermark_scale(settings, "nexus_watermark_scale", 1.0f);
 +static properties::property<bool> nexus_crosshair(settings, "nexus_crosshair", false);
 +static properties::property<float> nexus_crosshair_scale(settings, "nexus_crosshair_scale", 1.0f);
++static properties::property<bool> nexus_fps_graph(settings, "nexus_fps_graph", false);
++static properties::property<int> nexus_fps_graph_pos(settings, "nexus_fps_graph_pos", 0);
++static properties::property<float> nexus_fps_graph_scale(settings, "nexus_fps_graph_scale", 1.0f);
 +static properties::property<bool> nexus_discord_button(settings, "nexus_discord_button", true);
 +static properties::property<bool> nexus_toggle_sprint(settings, "nexus_toggle_sprint", false);
 +static properties::property<float> nexus_hud_opacity(settings, "nexus_hud_opacity", 0.55f);
 +static properties::property<int> nexus_hud_accent(settings, "nexus_hud_accent", 0);
 +static properties::property<bool> nexus_hud_in_menus(settings, "nexus_hud_in_menus", false);
++// Menu scale is new in nexus10. It enlarges the mod menu only (never the HUD),
++// so the menu reads well at 1440p and on small laptop screens. Default 1.3x.
++static properties::property<float> nexus_menu_scale(settings, "nexus_menu_scale", 1.3f);
 +static properties::property<std::string> nexus_menu_key(settings, "nexus_menu_key", "RightShift");
 +
  static properties::property<std::string> videoMode(settings, "videoMode", "");
  static properties::property<float> scale(settings, "scale", 1);
  static properties::property<std::string> menubarFocusKey(settings, "menubarFocusKey", "");
-@@ -66,7 +122,14 @@ std::string Settings::getPath() {
+@@ -66,7 +132,14 @@ std::string Settings::getPath() {
  void Settings::load() {
      std::ifstream propertiesFile(getPath());
      if(propertiesFile) {
@@ -379,7 +389,7 @@ index 576948c..189c012 100644
      }
      if(::enable_imgui.get() != "auto") {
          properties::property_list dummy;
-@@ -87,6 +150,33 @@ void Settings::load() {
+@@ -87,6 +160,37 @@ void Settings::load() {
      Settings::keystroke_hud_x = ::keystroke_hud_x.get();
      Settings::keystroke_hud_y = ::keystroke_hud_y.get();
  
@@ -403,17 +413,21 @@ index 576948c..189c012 100644
 +    Settings::nexus_watermark_scale = ::nexus_watermark_scale.get();
 +    Settings::nexus_crosshair = ::nexus_crosshair.get() ? 1 : 0;
 +    Settings::nexus_crosshair_scale = ::nexus_crosshair_scale.get();
++    Settings::nexus_fps_graph = ::nexus_fps_graph.get() ? 1 : 0;
++    Settings::nexus_fps_graph_pos = ::nexus_fps_graph_pos.get();
++    Settings::nexus_fps_graph_scale = ::nexus_fps_graph_scale.get();
 +    Settings::nexus_discord_button = ::nexus_discord_button.get() ? 1 : 0;
 +    Settings::nexus_toggle_sprint = ::nexus_toggle_sprint.get() ? 1 : 0;
 +    Settings::nexus_hud_opacity = ::nexus_hud_opacity.get();
 +    Settings::nexus_hud_accent = ::nexus_hud_accent.get();
 +    Settings::nexus_hud_in_menus = ::nexus_hud_in_menus.get() ? 1 : 0;
++    Settings::nexus_menu_scale = ::nexus_menu_scale.get();
 +    Settings::nexus_menu_key = ::nexus_menu_key.get();
 +
      Settings::videoMode = ::videoMode.get();
      Settings::scale = ::scale.get();
      Settings::menubarFocusKey = ::menubarFocusKey.get();
-@@ -113,6 +203,33 @@ void Settings::save() {
+@@ -113,6 +217,37 @@ void Settings::save() {
      ::keystroke_hud_x.set(Settings::keystroke_hud_x);
      ::keystroke_hud_y.set(Settings::keystroke_hud_y);
  
@@ -437,21 +451,25 @@ index 576948c..189c012 100644
 +    ::nexus_watermark_scale.set(Settings::nexus_watermark_scale);
 +    ::nexus_crosshair.set(Settings::nexus_crosshair != 0);
 +    ::nexus_crosshair_scale.set(Settings::nexus_crosshair_scale);
++    ::nexus_fps_graph.set(Settings::nexus_fps_graph != 0);
++    ::nexus_fps_graph_pos.set(Settings::nexus_fps_graph_pos);
++    ::nexus_fps_graph_scale.set(Settings::nexus_fps_graph_scale);
 +    ::nexus_discord_button.set(Settings::nexus_discord_button != 0);
 +    ::nexus_toggle_sprint.set(Settings::nexus_toggle_sprint != 0);
 +    ::nexus_hud_opacity.set(Settings::nexus_hud_opacity);
 +    ::nexus_hud_accent.set(Settings::nexus_hud_accent);
 +    ::nexus_hud_in_menus.set(Settings::nexus_hud_in_menus != 0);
++    ::nexus_menu_scale.set(Settings::nexus_menu_scale);
 +    ::nexus_menu_key.set(Settings::nexus_menu_key);
 +
      ::videoMode.set(Settings::videoMode);
      ::scale.set(Settings::scale);
      ::menubarFocusKey.set(Settings::menubarFocusKey);
 diff --git a/src/settings.h b/src/settings.h
-index b377de8..d843951 100644
+index b377de8..589afed 100644
 --- a/src/settings.h
 +++ b/src/settings.h
-@@ -20,6 +20,45 @@ struct Settings {
+@@ -20,6 +20,50 @@ struct Settings {
      static float keystroke_hud_x;
      static float keystroke_hud_y;
  
@@ -486,12 +504,17 @@ index b377de8..d843951 100644
 +    static int nexus_crosshair;
 +    static float nexus_crosshair_scale;
 +
++    static int nexus_fps_graph;
++    static int nexus_fps_graph_pos;
++    static float nexus_fps_graph_scale;
++
 +    static int nexus_discord_button;
 +    static int nexus_toggle_sprint;
 +
 +    static float nexus_hud_opacity;
 +    static int nexus_hud_accent;
 +    static int nexus_hud_in_menus;
++    static float nexus_menu_scale;
 +    static std::string nexus_menu_key;
 +
      static std::string videoMode;

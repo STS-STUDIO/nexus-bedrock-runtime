@@ -75,9 +75,33 @@ struct Face {
     float px;
 };
 
-float ui() {
+// The base UI scale is the launcher's own global scale (HiDPI and the like).
+// The mod menu can additionally enlarge itself by the player's Menu Size setting
+// without touching the HUD: drawMenu raises g_uiScaleOverride for the duration of
+// its own draw and clears it afterwards. Every menu widget sizes off ui(), so
+// they all grow together, while drawHud (called separately, with the override
+// cleared) keeps rendering the HUD at the base scale it always used.
+float g_uiScaleOverride = 0.0f;
+
+float baseUi() {
     float s = (float)Settings::scale;
     return s > 0.01f ? s : 1.0f;
+}
+
+float ui() {
+    if(g_uiScaleOverride > 0.01f) {
+        return g_uiScaleOverride;
+    }
+    return baseUi();
+}
+
+// Menu Size, clamped. Defaults to 1.3x so the menu reads comfortably at 1440p
+// and on small laptop screens.
+float menuScaleFactor() {
+    float m = Settings::nexus_menu_scale;
+    if(m < 0.8f) m = 0.8f;
+    if(m > 2.0f) m = 2.0f;
+    return m;
 }
 
 Face face(float logical) {
@@ -128,7 +152,8 @@ char const* CATEGORY_NAMES[CAT_COUNT] = {"COMBAT", "DISPLAY", "GAMEPLAY", "PERKS
 enum Special {
     SPECIAL_NONE = 0,
     SPECIAL_VSYNC,
-    SPECIAL_FULLSCREEN
+    SPECIAL_FULLSCREEN,
+    SPECIAL_COMING_SOON  // announced, visible in the grid, not toggleable yet
 };
 
 struct Module {
@@ -147,6 +172,9 @@ Module MODULES[] = {
     {"fps", "FPS Counter", "Frames per second",
      "Live frames per second, sampled from the render loop every frame.",
      CAT_DISPLAY, &Settings::nexus_fps, &Settings::nexus_fps_pos, &Settings::nexus_fps_scale, SPECIAL_NONE},
+    {"fpsgraph", "FPS Graph", "Frame rate drawn as a live graph",
+     "Plots your frame rate over the last few seconds as a filled graph, with the current value read out. It samples the same render loop the FPS counter does, so the two always agree.",
+     CAT_DISPLAY, &Settings::nexus_fps_graph, &Settings::nexus_fps_graph_pos, &Settings::nexus_fps_graph_scale, SPECIAL_NONE},
     {"cps", "CPS Counter", "Left and right clicks per second",
      "Counts your left and right mouse clicks over a rolling one second window. The PvP click speed readout.",
      CAT_COMBAT, &Settings::nexus_cps, &Settings::nexus_cps_pos, &Settings::nexus_cps_scale, SPECIAL_NONE},
@@ -177,6 +205,9 @@ Module MODULES[] = {
     {"fullscreen", "Fullscreen", "Give Minecraft the whole screen",
      "Puts the game window into fullscreen on your current display.",
      CAT_DISPLAY, nullptr, nullptr, nullptr, SPECIAL_FULLSCREEN},
+    {"replay", "Replay Mod", "Record and rewatch your gameplay",
+     "Record your matches and play them back afterwards with a free moving camera. This one is in active development and is not available to switch on yet.",
+     CAT_GAMEPLAY, nullptr, nullptr, nullptr, SPECIAL_COMING_SOON},
 };
 const int MODULE_COUNT = (int)(sizeof(MODULES) / sizeof(MODULES[0]));
 
@@ -186,6 +217,8 @@ bool moduleEnabled(Module const& m, GameWindow* window) {
         return Settings::vsync;
     case SPECIAL_FULLSCREEN:
         return window ? window->getFullscreen() : Settings::fullscreen;
+    case SPECIAL_COMING_SOON:
+        return false;
     default:
         return m.enabled && *m.enabled != 0;
     }
@@ -205,6 +238,8 @@ void setModuleEnabled(Module const& m, GameWindow* window, bool on) {
         }
         Settings::fullscreen = on;
         break;
+    case SPECIAL_COMING_SOON:
+        return;  // not switchable yet, and nothing to persist
     default:
         if(m.enabled) {
             *m.enabled = on ? 1 : 0;
@@ -240,6 +275,11 @@ int g_rcps = 0;
 
 // Toggle Sprint runtime state.
 bool g_sprintHeld = false;
+
+// FPS graph rolling history, newest last. One sample per frame; capped so the
+// graph always shows roughly the last couple of seconds of frames.
+std::vector<float> g_fpsHistory;
+const int FPS_HISTORY_MAX = 120;
 
 float& anim(char const* key) {
     return g_anim[key];
@@ -436,6 +476,13 @@ void updateClickHistory() {
     g_rcps = cpsFor(g_rmb, ImGui::IsKeyDown(ImGuiKey_MouseRight), g_rmbLast);
 }
 
+void updateFpsHistory() {
+    g_fpsHistory.push_back(ImGui::GetIO().Framerate);
+    if((int)g_fpsHistory.size() > FPS_HISTORY_MAX) {
+        g_fpsHistory.erase(g_fpsHistory.begin());
+    }
+}
+
 ImGuiKey letterKey(char c) {
     if(c >= 'a' && c <= 'z') {
         c = (char)(c - 'a' + 'A');
@@ -510,6 +557,9 @@ ImVec2 measureHud(Module const& m, float s) {
     if(std::strcmp(m.id, "keystrokes") == 0) {
         return measureKeystrokes(s);
     }
+    if(std::strcmp(m.id, "fpsgraph") == 0) {
+        return ImVec2(134.0f * s, 54.0f * s);
+    }
     HudText t = hudTextFor(m);
     Face big = face(19.0f / ui() * s);
     Face small = face(12.0f / ui() * s);
@@ -582,6 +632,58 @@ void drawHudModule(ImDrawList* dl, Module const& m, ImVec2 pos, ImVec2 size, flo
                    ImGui::IsKeyDown(ImGuiKey_MouseLeft), s, opacity);
         drawKeycap(dl, ImVec2(pos.x + half + gap, y), ImVec2(pos.x + size.x, y + cap * 0.78f), "RMB",
                    ImGui::IsKeyDown(ImGuiKey_MouseRight), s, opacity);
+        return;
+    }
+
+    if(std::strcmp(m.id, "fpsgraph") == 0) {
+        ImVec2 b = ImVec2(pos.x + size.x, pos.y + size.y);
+        float rounding = 7.0f * s;
+        dl->AddRectFilled(pos, b, col(COL_BG, opacity), rounding);
+        dl->AddRect(pos, b, col(ImVec4(1, 1, 1, 0.08f)), rounding, 0, 1.0f * s);
+        dl->AddRectFilled(pos, ImVec2(pos.x + 3.0f * s, b.y), col(accent(), 0.9f), rounding);
+
+        float padX = 12.0f * s + 4.0f * s;
+        float padY = 6.0f * s;
+
+        // Current value, top left, sharing the HUD's head/tail styling.
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%d", (int)(ImGui::GetIO().Framerate + 0.5f));
+        Face big = face(16.0f / ui() * s);
+        Face small = face(11.0f / ui() * s);
+        ImVec2 headSize = measure(big, buf);
+        drawText(dl, big, ImVec2(pos.x + padX, pos.y + padY), col(COL_TEXT), buf);
+        ImVec2 tailSize = measure(small, "FPS");
+        drawText(dl, small, ImVec2(pos.x + padX + headSize.x + 5.0f * s, pos.y + padY + headSize.y - tailSize.y - 1.0f * s),
+                 col(accent(), 0.95f), "FPS");
+
+        // The graph fills the width below the readout.
+        float gx0 = pos.x + padX;
+        float gx1 = b.x - 12.0f * s;
+        float gy0 = pos.y + padY + headSize.y + 3.0f * s;
+        float gy1 = b.y - padY;
+        int n = (int)g_fpsHistory.size();
+        if(gx1 > gx0 + 4.0f && gy1 > gy0 + 2.0f && n > 1) {
+            float maxFps = 1.0f;
+            for(float v : g_fpsHistory) {
+                if(v > maxFps) maxFps = v;
+            }
+            float top = maxFps * 1.1f;  // headroom so a spike is not clipped
+            float gw = gx1 - gx0;
+            float gh = gy1 - gy0;
+            ImVec2 prev;
+            for(int i = 0; i < n; i++) {
+                float fx = gx0 + gw * ((float)i / (float)(n - 1));
+                float norm = g_fpsHistory[i] / top;
+                if(norm < 0.0f) norm = 0.0f;
+                if(norm > 1.0f) norm = 1.0f;
+                float fy = gy1 - gh * norm;
+                if(i > 0) {
+                    dl->AddQuadFilled(prev, ImVec2(fx, fy), ImVec2(fx, gy1), ImVec2(prev.x, gy1), col(accent(), 0.18f));
+                    dl->AddLine(prev, ImVec2(fx, fy), col(accent(), 0.95f), 1.4f * s);
+                }
+                prev = ImVec2(fx, fy);
+            }
+        }
         return;
     }
 
@@ -685,7 +787,8 @@ void drawMenubarSection(GameWindow* window) {
     for(int i = 0; i < MODULE_COUNT; i++) {
         Module const& m = MODULES[i];
         bool on = moduleEnabled(m, window);
-        if(ImGui::MenuItem(m.name, nullptr, on)) {
+        bool soon = (m.special == SPECIAL_COMING_SOON);
+        if(ImGui::MenuItem(m.name, soon ? "SOON" : nullptr, on, !soon)) {
             setModuleEnabled(m, window, !on);
         }
     }
@@ -722,6 +825,7 @@ static void drawModuleGrid(GameWindow* window, float contentWidth) {
             ImGui::SameLine(0, gap);
         }
         bool on = moduleEnabled(m, window);
+        bool soon = (m.special == SPECIAL_COMING_SOON);
 
         char cardId[64];
         std::snprintf(cardId, sizeof(cardId), "##nexuscard_%s", m.id);
@@ -747,15 +851,28 @@ static void drawModuleGrid(GameWindow* window, float contentWidth) {
                  col(accent(), 0.45f + 0.35f * hover), catName);
 
         // Footer: switch plus state label on the left, gear on the right.
+        // A coming-soon module shows a static badge in place of the switch.
         float switchH = 18.0f * ui();
         float footerY = origin.y + cardH - pad - switchH;
-        float& t = anim((std::string("sw_") + m.id).c_str());
-        t = ease(t, on ? 1.0f : 0.0f, 22.0f);
-        drawSwitch(dl, ImVec2(origin.x + pad, footerY), switchH, on, t);
+        if(soon) {
+            char const* label = "COMING SOON";
+            Face badge = face(15.0f);
+            ImVec2 ls = measure(badge, label);
+            float bh = switchH + 4.0f * ui();
+            ImVec2 bb0 = ImVec2(origin.x + pad, footerY - 2.0f * ui());
+            ImVec2 bb1 = ImVec2(bb0.x + ls.x + 18.0f * ui(), bb0.y + bh);
+            dl->AddRectFilled(bb0, bb1, col(accent(), 0.16f), bh * 0.5f);
+            dl->AddRect(bb0, bb1, col(accent(), 0.55f), bh * 0.5f, 0, 1.0f * ui());
+            drawText(dl, badge, ImVec2(bb0.x + 9.0f * ui(), bb0.y + (bh - ls.y) * 0.5f), col(accent(), 0.9f), label);
+        } else {
+            float& t = anim((std::string("sw_") + m.id).c_str());
+            t = ease(t, on ? 1.0f : 0.0f, 22.0f);
+            drawSwitch(dl, ImVec2(origin.x + pad, footerY), switchH, on, t);
 
-        Face state = face(15.0f);
-        drawText(dl, state, ImVec2(origin.x + pad + switchH * 1.9f + 8.0f * ui(), footerY + 1.0f * ui()),
-                 on ? col(accent()) : col(COL_OFF), on ? "ENABLED" : "DISABLED");
+            Face state = face(15.0f);
+            drawText(dl, state, ImVec2(origin.x + pad + switchH * 1.9f + 8.0f * ui(), footerY + 1.0f * ui()),
+                     on ? col(accent()) : col(COL_OFF), on ? "ENABLED" : "DISABLED");
+        }
 
         bool gearClicked = false;
         if(m.pos || m.scale) {
@@ -775,7 +892,7 @@ static void drawModuleGrid(GameWindow* window, float contentWidth) {
         if(gearClicked) {
             g_openSettings = i;
             g_resetScroll = true;
-        } else if(clicked) {
+        } else if(clicked && !soon) {
             setModuleEnabled(m, window, !on);
         }
         drawn++;
@@ -961,6 +1078,10 @@ void drawMenu(GameWindow* window) {
         return;
     }
 
+    // Enlarge the whole menu by the player's Menu Size for the duration of this
+    // draw only. Cleared at the bottom so drawHud keeps the base UI scale.
+    g_uiScaleOverride = baseUi() * menuScaleFactor();
+
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::GetBackgroundDrawList()->AddRectFilled(
         vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
@@ -1038,6 +1159,39 @@ void drawMenu(GameWindow* window) {
             ImU32 closeCol = closeHover ? col(COL_TEXT) : col(COL_MUTED);
             dl->AddLine(ImVec2(cc.x - arm, cc.y - arm), ImVec2(cc.x + arm, cc.y + arm), closeCol, 1.8f * ui());
             dl->AddLine(ImVec2(cc.x + arm, cc.y - arm), ImVec2(cc.x - arm, cc.y + arm), closeCol, 1.8f * ui());
+        }
+
+        // Menu size stepper: [A-] 130% [A+], to the left of the close button.
+        // A global setting, so it lives in the header and is drawn on every page.
+        {
+            float closeSize = 26.0f * ui();
+            float btn = 30.0f * ui();
+            float ctrlY = wp.y + 24.0f * ui() + (closeSize - btn) * 0.5f;
+            float rightEdge = wp.x + ws.x - pad;
+            char pctBuf[16];
+            std::snprintf(pctBuf, sizeof(pctBuf), "%d%%", (int)(menuScaleFactor() * 100.0f + 0.5f));
+            Face lf = face(15.0f);
+            ImVec2 pls = measure(lf, pctBuf);
+            float gap2 = 8.0f * ui();
+            float plusX = rightEdge - closeSize - 16.0f * ui() - btn;
+            float pctX = plusX - gap2 - pls.x;
+            float minusX = pctX - gap2 - btn;
+
+            ImGui::SetCursorScreenPos(ImVec2(minusX, ctrlY));
+            if(pillButton("##nexusmenusize_minus", "A-", ImVec2(btn, btn), false)) {
+                float v = menuScaleFactor() - 0.1f;
+                if(v < 0.8f) v = 0.8f;
+                Settings::nexus_menu_scale = v;
+                Settings::save();
+            }
+            drawText(dl, lf, ImVec2(pctX, ctrlY + (btn - pls.y) * 0.5f), col(COL_MUTED), pctBuf);
+            ImGui::SetCursorScreenPos(ImVec2(plusX, ctrlY));
+            if(pillButton("##nexusmenusize_plus", "A+", ImVec2(btn, btn), false)) {
+                float v = menuScaleFactor() + 0.1f;
+                if(v > 2.0f) v = 2.0f;
+                Settings::nexus_menu_scale = v;
+                Settings::save();
+            }
         }
 
         // ---- Divider under the header ----
@@ -1137,12 +1291,16 @@ void drawMenu(GameWindow* window) {
 
     ImGui::PopStyleColor(5);
     ImGui::PopStyleVar(4);
+
+    // Back to the base scale for everything drawn after the menu (the HUD).
+    g_uiScaleOverride = 0.0f;
 }
 
 // ---------------------------------------------------------------------------
 
 void drawHud(GameWindow* window) {
     updateClickHistory();
+    updateFpsHistory();
 
     bool inGame = CorePatches::isMouseLocked();
     bool showHud = inGame || g_menuOpen || Settings::nexus_hud_in_menus != 0;
